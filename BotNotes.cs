@@ -20,11 +20,11 @@ namespace NotchNotesWindows {
 class App : Application {
  [STAThread] static void Main() {
   bool first;
-  using(var mutex=new System.Threading.Mutex(true, @"Local\DotNotesSingleInstance", out first)) {
-   if(!first) { NotchNotesWindows.MainWindow.Notice("DotNotes 已在运行，点屏幕顶部的小圆点或通知区域图标就能打开。"); return; }
-   // 旧版 NotchNotes 还开着时不能搬数据文件夹，否则它之后保存的内容会写回旧文件夹
-   if(NotchNotesWindows.MainWindow.OldVersionRunning()) { NotchNotesWindows.MainWindow.Notice("旧版 NotchNotes 还在运行。请先在通知区域右键它的图标选“退出”，再打开 DotNotes。笔记会自动搬过来。"); return; }
-   NotchNotesWindows.MainWindow.MigrateFromNotchNotes(); NotchNotesWindows.MainWindow.FixAutoStartPath();
+  using(var mutex=new System.Threading.Mutex(true, @"Local\BotNotesSingleInstance", out first)) {
+   if(!first) { NotchNotesWindows.MainWindow.Notice("BotNotes 已在运行，点屏幕顶部的小圆点或通知区域图标就能打开。"); return; }
+   // 旧版（DotNotes 或更早的 NotchNotes）还开着时不能搬数据文件夹，否则它之后保存的内容会写回旧文件夹
+   string oldName=NotchNotesWindows.MainWindow.OldVersionRunning(); if(oldName!=null) { NotchNotesWindows.MainWindow.Notice("旧版 "+oldName+" 还在运行。请先在通知区域右键它的图标选“退出”，再打开 BotNotes。笔记会自动搬过来。"); return; }
+   NotchNotesWindows.MainWindow.MigrateOldVersions(); NotchNotesWindows.MainWindow.FixAutoStartPath();
    var app = new App(); app.ShutdownMode=ShutdownMode.OnExplicitShutdown; app.Run(new MainWindow());
   }
  }
@@ -402,24 +402,35 @@ class MainWindow : Window {
  const int K_Line=0, K_Blank=1, K_Code=2;
  const double BodySize=14.5, BodyLine=24;
  readonly string dir=DataDir();
- // 改名为 DotNotes 后数据放在 %LOCALAPPDATA%\DotNotes；第一次启动时把旧的 NotchNotesWindows 整个改名过来。改名失败（比如文件被占用）就继续用旧文件夹，笔记不会看起来“丢了”。
- internal static string LocalRoot=null, OldRunName="NotchNotes"; // 测试时换成临时位置和临时名字
+ // 数据放在 %LOCALAPPDATA%\BotNotes。改名历史：NotchNotesWindows → DotNotes → BotNotes。
+ // 第一次启动时把最近的旧文件夹整个改名过来；改名失败（比如文件被占用）就继续用旧文件夹，笔记不会看起来“丢了”。
+ internal static string LocalRoot=null; // 测试时换成临时位置
+ internal static string[] OldDataNames={"DotNotes","NotchNotesWindows"}, OldRunNames={"DotNotes","NotchNotes"}, OldMutexes={@"Local\DotNotesSingleInstance",@"Local\NotchNotesWindowsSingleInstance"}, OldAppNames={"DotNotes","NotchNotes"};
  static string AppData(string name) { return Path.Combine(LocalRoot??Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),name); }
- static string DataDir() { string now=AppData("DotNotes"), old=AppData("NotchNotesWindows"); bool fresh=!Directory.Exists(now); try { if(!fresh) fresh=Directory.GetFileSystemEntries(now).Length==0; } catch {} return fresh && Directory.Exists(old)?old:now; }
- internal static bool OldVersionRunning() { try { using(System.Threading.Mutex.OpenExisting(@"Local\NotchNotesWindowsSingleInstance")) return true; } catch { return false; } }
- internal static void MigrateFromNotchNotes() {
-  string now=AppData("DotNotes"), old=AppData("NotchNotesWindows");
+ static bool EmptyOrMissing(string d) { try { return !Directory.Exists(d) || Directory.GetFileSystemEntries(d).Length==0; } catch { return false; } }
+ static string DataDir() { string now=AppData("BotNotes"); if(!EmptyOrMissing(now)) return now; foreach(var name in OldDataNames) { string old=AppData(name); if(Directory.Exists(old) && !EmptyOrMissing(old)) return old; } return now; }
+ // 返回还在运行的旧版名字；都没在运行时返回 null。
+ internal static string OldVersionRunning() { for(int i=0;i<OldMutexes.Length;i++) { try { using(System.Threading.Mutex.OpenExisting(OldMutexes[i])) return OldAppNames[i]; } catch {} } return null; }
+ internal static void MigrateOldVersions() {
+  string now=AppData("BotNotes");
   try {
-   if(Directory.Exists(old) && Directory.Exists(now) && Directory.GetFileSystemEntries(now).Length==0) Directory.Delete(now); // 新文件夹是空的（没真正用过）就当不存在
-   if(Directory.Exists(old) && !Directory.Exists(now)) Directory.Move(old,now);
+   foreach(var name in OldDataNames) {
+    string old=AppData(name); if(!Directory.Exists(old) || EmptyOrMissing(old)) continue;
+    if(Directory.Exists(now) && EmptyOrMissing(now)) Directory.Delete(now); // 新文件夹是空的（没真正用过）就当不存在
+    if(!Directory.Exists(now)) Directory.Move(old,now);
+    break; // 只搬最近的那一个
+   }
   } catch {}
-  // 开机启动项：旧名字的那条删掉；原来是开着的（没在任务管理器里禁用）就用新名字重新登记
+  // 开机启动项：旧名字的删掉；只要有一条原来是开着的（没在任务管理器里禁用），就用新名字重新登记
   try {
    using(var k=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey,true)) {
-    if(k==null || k.GetValue(OldRunName)==null) return;
-    bool disabled=false;
-    using(var a=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(ApprovedKey,true)) if(a!=null) { var v=a.GetValue(OldRunName) as byte[]; disabled=v!=null && v.Length>0 && (v[0]&1)==1; a.DeleteValue(OldRunName,false); }
-    k.DeleteValue(OldRunName,false); if(!disabled) k.SetValue(RunName,RunCommand());
+    if(k==null) return; bool found=false, enabled=false;
+    foreach(var oldRun in OldRunNames) {
+     if(k.GetValue(oldRun)==null) continue; found=true; bool disabled=false;
+     using(var a=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(ApprovedKey,true)) if(a!=null) { var v=a.GetValue(oldRun) as byte[]; disabled=v!=null && v.Length>0 && (v[0]&1)==1; a.DeleteValue(oldRun,false); }
+     k.DeleteValue(oldRun,false); if(!disabled) enabled=true;
+    }
+    if(found && enabled) k.SetValue(RunName,RunCommand());
    }
   } catch {}
  }
@@ -483,7 +494,7 @@ class MainWindow : Window {
   Palette.SetBackground(background); Palette.SetAccent(accent);
   // 只放窗口级资源：应用级资源里的画刷会被冻结，之后无法换色
   ThemeResources();
-  Title="DotNotes"; WindowStyle=WindowStyle.None; AllowsTransparency=true; Background=Brushes.Transparent; ResizeMode=ResizeMode.NoResize; ShowInTaskbar=false; Topmost=true; Width=184; Height=34; FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI");
+  Title="BotNotes"; WindowStyle=WindowStyle.None; AllowsTransparency=true; Background=Brushes.Transparent; ResizeMode=ResizeMode.NoResize; ShowInTaskbar=false; Topmost=true; Width=184; Height=34; FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI");
   Left=(SystemParameters.PrimaryScreenWidth-Width)/2; Top=0;
   Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar),DarkScrollBar()); Resources.Add(typeof(ToolTip),TipStyle());
   var outer=new Grid(); Content=outer; outerGrid=outer;
@@ -497,7 +508,7 @@ class MainWindow : Window {
   root.RowDefinitions.Add(new RowDefinition { Height=new GridLength(34) }); root.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star) });
 
   // 顶部入口：一块真正的“刘海”——两侧用内凹弧接到屏幕上边缘，下方圆角。收起和展开是同一个形状。
-  var notchLabel=Ui.IconLabel(G_Note,"DotNotes"); ((TextBlock)notchLabel.Children[0]).FontSize=12; ((TextBlock)notchLabel.Children[0]).Foreground=Palette.NotchMuted;
+  var notchLabel=Ui.IconLabel(G_Note,"BotNotes"); ((TextBlock)notchLabel.Children[0]).FontSize=12; ((TextBlock)notchLabel.Children[0]).Foreground=Palette.NotchMuted;
   notch=Ui.Button(notchLabel,"点击收起；按住拖动可移动面板",new CornerRadius(0,0,12,12)); notch.Foreground=Palette.NotchText; notch.FocusVisualStyle=null; notch.Height=34; notch.FontSize=12; notch.VerticalAlignment=VerticalAlignment.Top;
   hoverTimer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(Math.Max(1,hoverDelay)) };
   hoverTimer.Tick+=(s,e)=> { hoverTimer.Stop(); if(!expanded && hoverOn && dotHit.IsMouseOver) Expand(true); };
@@ -509,7 +520,7 @@ class MainWindow : Window {
   root.Children.Add(grip); root.Children.Add(notchShape); root.Children.Add(notch); Draggable(notch,false,true,null);
   // 收起后只留一个小机器人；周围一块看不见的感应区负责悬停、点击、拖动和拖入（Alpha=1，肉眼不可见但能接住鼠标）。
   dotLayer=new Grid { HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Top };
-  dotHit=new Border { Width=72, Height=16, Background=new SolidColorBrush(Color.FromArgb(1,0,0,0)), Cursor=Cursors.Hand, ToolTip="DotNotes：点击或停留展开；按住拖动可移动" }; ToolTipService.SetInitialShowDelay(dotHit,1200);
+  dotHit=new Border { Width=72, Height=16, Background=new SolidColorBrush(Color.FromArgb(1,0,0,0)), Cursor=Cursors.Hand, ToolTip="BotNotes：点击或停留展开；按住拖动可移动" }; ToolTipService.SetInitialShowDelay(dotHit,1200);
   // 辉光、球体和眼睛一起随弹簧变形，变形原点始终在球心。
   dotBody=new Grid { Width=dotSize, Height=dotSize, HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Top, Margin=new Thickness(0,4,0,0), IsHitTestVisible=false, RenderTransformOrigin=new Point(0.5,0.5), RenderTransform=dotWarp=new MatrixTransform() };
   bot=new BotVisual(dotSize,accent,Palette.Light); dotBody.Children.Add(bot);
@@ -638,7 +649,7 @@ class MainWindow : Window {
   LoadFolds(); LoadTabOrder();
   loading=false; RefreshShelf(); RefreshTabs(); SetPreview(false);
 
-  tray=new Forms.NotifyIcon { Text="DotNotes", Icon=LoadAppIcon(), Visible=true };
+  tray=new Forms.NotifyIcon { Text="BotNotes", Icon=LoadAppIcon(), Visible=true };
   var menu=new Forms.ContextMenuStrip { ShowImageMargin=false, Font=new D.Font("Microsoft YaHei UI",9f), Padding=new Forms.Padding(0,4,0,4) }; var trayLook=new TrayMenuRenderer(); menu.Renderer=trayLook;
   Action<string,EventHandler> item=(t,h)=> { var m=new Forms.ToolStripMenuItem(t,null,h) { Padding=new Forms.Padding(8,5,28,5) }; menu.Items.Add(m); };
   item("打开笔记",(s,e)=>Expand(false)); item("设置…",(s,e)=> { Expand(false); OpenSettings(); }); menu.Items.Add(new Forms.ToolStripSeparator()); item("退出",(s,e)=>Quit());
@@ -701,7 +712,7 @@ class MainWindow : Window {
   return g;
  }
  static D.Icon LoadAppIcon() {
-  try { var st=typeof(MainWindow).Assembly.GetManifestResourceStream("DotNotes.ico"); if(st!=null) using(st) return new D.Icon(st,Forms.SystemInformation.SmallIconSize); } catch {}
+  try { var st=typeof(MainWindow).Assembly.GetManifestResourceStream("BotNotes.ico"); if(st!=null) using(st) return new D.Icon(st,Forms.SystemInformation.SmallIconSize); } catch {}
   return MakeTrayIcon();
  }
  static D.Icon MakeTrayIcon() {
@@ -1408,7 +1419,7 @@ class MainWindow : Window {
  // 和面板同一套样式的小窗口，代替系统 MessageBox：面板色圆角卡片、柔和阴影、右下角按钮（主按钮强调色，危险操作用警示色）。
  // Enter 等于点主按钮，Esc 关闭。返回 true 表示点了主按钮；canOk 返回 false 时不关闭。
  static bool Dialog(Window owner,string title,object body,string ok,string cancel,bool warn,Func<bool> canOk,UIElement focus) {
-  var w=new Window { WindowStyle=WindowStyle.None, AllowsTransparency=true, Background=Brushes.Transparent, ResizeMode=ResizeMode.NoResize, ShowInTaskbar=owner==null, Topmost=true, SizeToContent=SizeToContent.WidthAndHeight, FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI"), Title=title??"DotNotes" };
+  var w=new Window { WindowStyle=WindowStyle.None, AllowsTransparency=true, Background=Brushes.Transparent, ResizeMode=ResizeMode.NoResize, ShowInTaskbar=owner==null, Topmost=true, SizeToContent=SizeToContent.WidthAndHeight, FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI"), Title=title??"BotNotes" };
   if(owner!=null) { w.Owner=owner; w.WindowStartupLocation=WindowStartupLocation.CenterOwner; foreach(var key in new object[] { "HoverBrush","AccentBrush",typeof(ToolTip) }) if(owner.Resources.Contains(key)) w.Resources[key]=owner.Resources[key]; }
   else { w.WindowStartupLocation=WindowStartupLocation.CenterScreen; w.Resources["HoverBrush"]=new SolidColorBrush(Palette.Light?Colors.Black:Colors.White); w.Resources["AccentBrush"]=new SolidColorBrush(Palette.Accent.Color); }
   var root=new Grid { Margin=new Thickness(28) }; w.Content=root;
@@ -1502,8 +1513,8 @@ class MainWindow : Window {
     else if(k=="background") { try { background=(Color)ColorConverter.ConvertFromString(v); } catch {} }
     else if(k=="archiveDir" && v.Length>0) archiveDir=v;
    }
-   string oldRoot=AppData("NotchNotesWindows"); // 旧数据文件夹搬走后，指向它里面的归档位置跟着改
-   if(archiveDir!=null && !Directory.Exists(oldRoot) && archiveDir.StartsWith(oldRoot,StringComparison.OrdinalIgnoreCase)) archiveDir=dir+archiveDir.Substring(oldRoot.Length);
+   foreach(var name in OldDataNames) { string oldRoot=AppData(name); // 旧数据文件夹搬走后，指向它里面的归档位置跟着改
+    if(archiveDir!=null && !Directory.Exists(oldRoot) && archiveDir.StartsWith(oldRoot+"\\",StringComparison.OrdinalIgnoreCase)) archiveDir=dir+archiveDir.Substring(oldRoot.Length); }
   } catch {}
  }
  void SaveSettings() {
@@ -1541,7 +1552,7 @@ class MainWindow : Window {
   var list=new StackPanel(); dock.Children.Add(new ScrollViewer { Content=list, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled, FocusVisualStyle=null });
   list.Children.Add(new TextBlock { Text="设置", Foreground=Palette.Text, FontSize=16, FontWeight=FontWeights.SemiBold, Margin=new Thickness(0,0,0,18) });
 
-  var auto=Section("开机自动启动","开启后，登录 Windows 时自动打开 DotNotes，不用每次开机后手动打开。也可以在任务管理器的“启动应用”里关掉。");
+  var auto=Section("开机自动启动","开启后，登录 Windows 时自动打开 BotNotes，不用每次开机后手动打开。也可以在任务管理器的“启动应用”里关掉。");
   var autoSeg=new Border { Background=Palette.Panel, BorderBrush=Palette.Line, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(8), Padding=new Thickness(2), HorizontalAlignment=HorizontalAlignment.Left };
   var autoRow=new StackPanel { Orientation=Orientation.Horizontal }; autoSeg.Child=autoRow;
   autoOnBtn=Ui.Button("开启","登录 Windows 时自动打开",new CornerRadius(6)); autoOnBtn.Height=26; autoOnBtn.Click+=(s,e)=>SetAutoStart(true); autoRow.Children.Add(autoOnBtn);
@@ -1560,7 +1571,7 @@ class MainWindow : Window {
   plusBtn=Secondary(Ui.Icon(G_Add,11),"延长 0.1 秒"); plusBtn.Width=30; plusBtn.Padding=new Thickness(0); plusBtn.Margin=new Thickness(0); plusBtn.Click+=(s,e)=>StepHover(100); hoverRow.Children.Add(plusBtn);
   hover.Children.Add(hoverRow); list.Children.Add(hover);
 
-  var place=Section("位置和大小","按住小圆点，或按住面板顶部的空白处和“DotNotes”标签，可以拖到别处。拖到屏幕顶边附近会自动贴住。按住面板的左、右、下边或下面两个角拖动，可以改大小；面板在顶部正中时左右一起缩放，保持居中。");
+  var place=Section("位置和大小","按住小圆点，或按住面板顶部的空白处和“BotNotes”标签，可以拖到别处。拖到屏幕顶边附近会自动贴住。按住面板的左、右、下边或下面两个角拖动，可以改大小；面板在顶部正中时左右一起缩放，保持居中。");
   var placeRow=new StackPanel { Orientation=Orientation.Horizontal };
   resetPlaceBtn=Secondary("回到顶部正中","把面板和小圆点放回屏幕顶部正中"); resetPlaceBtn.Click+=(s,e)=>ResetPosition(); placeRow.Children.Add(resetPlaceBtn);
   resetSizeBtn=Secondary("恢复默认大小","改回 520 × 590"); resetSizeBtn.Click+=(s,e)=>ResetSize(); placeRow.Children.Add(resetSizeBtn);
@@ -1681,7 +1692,7 @@ class MainWindow : Window {
  }
  // ——— 开机自动启动 ———
  // 写在当前用户的启动项（HKCU\...\Run）里，不需要管理员权限。任务管理器“启动应用”里禁用的，记在 StartupApproved 下，这里也认。
- internal static string RunName="DotNotes";
+ internal static string RunName="BotNotes";
  const string RunKey=@"Software\Microsoft\Windows\CurrentVersion\Run", ApprovedKey=@"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
  static string RunCommand() { return "\""+System.Reflection.Assembly.GetExecutingAssembly().Location+"\""; }
  static bool AutoStartOn() {
