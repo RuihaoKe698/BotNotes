@@ -103,7 +103,7 @@ class BotVisual : Canvas {
  readonly Canvas eyes=new Canvas();
  public readonly System.Windows.Shapes.Path leftDrag=new System.Windows.Shapes.Path(), rightDrag=new System.Windows.Shapes.Path(); public readonly ScaleTransform leftDragScale=new ScaleTransform(1,1), rightDragScale=new ScaleTransform(1,1); int faceGeneration;
  public double Diameter { get; private set; }
- public Canvas writeRearLeft, writeRearRight, writeFrontLeft, writeFrontRight; public readonly List<AnimationClock> writeClocks=new List<AnimationClock>(); readonly List<Animatable> writeTargets=new List<Animatable>(); readonly List<DependencyProperty> writeProperties=new List<DependencyProperty>(); System.Windows.Shapes.Ellipse writeHandLeft,writeHandRight,writeFrontHandLeft,writeFrontHandRight; bool writeSeeking;
+ public Canvas writeRearLeft, writeRearRight, writeFrontLeft, writeFrontRight; public readonly List<AnimationClock> writeClocks=new List<AnimationClock>(); readonly List<IAnimatable> writeTargets=new List<IAnimatable>(); readonly List<DependencyProperty> writeProperties=new List<DependencyProperty>(); readonly List<System.Windows.Shapes.Ellipse> writeHands=new List<System.Windows.Shapes.Ellipse>(); bool writeSeeking;
  public BotVisual(double d,Color accent,bool light) {
   IsHitTestVisible=false; ClipToBounds=false; RenderTransform=floating;
   // 这些图层只改变缩放或透明度，缓存可避免待机时每帧重算径向渐变。
@@ -143,37 +143,135 @@ class BotVisual : Canvas {
   string[] colors={"#208BFF","#288EFF","#3794FF","#4C9EFF","#65A9FF","#83B6FA"}; for(int i=0;i<colors.Length;i++) g.GradientStops.Add(new GradientStop(Tint(h,colors[i]),i/5.0));
   var shade=new LinearGradientBrush { StartPoint=new Point(0.5,0), EndPoint=new Point(0.5,1) }; shade.GradientStops.Add(new GradientStop(Colors.Transparent,0.4)); shade.GradientStops.Add(new GradientStop(Color.FromArgb(35,255,255,255),1));
   var drawing=new DrawingGroup(); var rect=new RectangleGeometry(new Rect(0,0,1,1)); drawing.Children.Add(new GeometryDrawing(g,null,rect)); drawing.Children.Add(new GeometryDrawing(shade,null,rect)); ball.Fill=new DrawingBrush(drawing);
-  if(writeHandLeft!=null) { writeHandLeft.Fill=ball.Fill; writeHandRight.Fill=ball.Fill; writeFrontHandLeft.Fill=ball.Fill; writeFrontHandRight.Fill=ball.Fill; }
+  if(writeHands.Count>0) { Brush handEdge=HandEdge(); for(int i=0;i<writeHands.Count;i++) { writeHands[i].Fill=ball.Fill; writeHands[i].Stroke=handEdge; } }
   Color c=Tint(h,"#208BFF"); var halo=new RadialGradientBrush { Center=new Point(0.5,0.5), GradientOrigin=new Point(0.5,0.5), RadiusX=0.5, RadiusY=0.5 }; halo.GradientStops.Add(new GradientStop(Color.FromArgb(150,c.R,c.G,c.B),0)); halo.GradientStops.Add(new GradientStop(Color.FromArgb(90,c.R,c.G,c.B),0.58)); halo.GradientStops.Add(new GradientStop(Color.FromArgb(0,c.R,c.G,c.B),1)); glow.Fill=halo; glow.Opacity=0.45;
  }
  // 写字用的图层在播放时才创建；停止时移除时钟和图层，避免留下透明残影。
+ // 动作顺序：手和道具先藏在球后，向左下/右下抽出来；完全离开球体轮廓后换到前面，
+ // 摆到写字姿势；写完停笔抬眼，再沿原路退回球后。rear/front 各放一套相同内容，
+ // 换层只切换可见性；换层那一刻两套内容都与球体没有像素重叠，所以画面上看不出跳变。
  public void StartWrite(Action done) {
-  StopWrite(); double d=Diameter; writeRearLeft=WriteCanvas(); writeRearRight=WriteCanvas(); writeFrontLeft=WriteCanvas(); writeFrontRight=WriteCanvas();
-  var leftScaleWrite=new ScaleTransform(0,0,d*0.5,d*0.5); var rightScaleWrite=leftScaleWrite; var move=new TranslateTransform(); var rightTransform=new TransformGroup(); rightTransform.Children.Add(rightScaleWrite); rightTransform.Children.Add(move);
-  writeRearLeft.RenderTransform=writeFrontLeft.RenderTransform=leftScaleWrite; writeRearRight.RenderTransform=writeFrontRight.RenderTransform=rightTransform;
-  writeHandLeft=Hand(d,0.08,0.80); writeHandRight=Hand(d,0.90,0.72); writeRearLeft.Children.Add(writeHandLeft); writeRearRight.Children.Add(writeHandRight); writeFrontHandLeft=Hand(d,0.08,0.80); writeFrontHandRight=Hand(d,0.90,0.72); writeFrontLeft.Children.Add(writeFrontHandLeft); writeFrontRight.Children.Add(writeFrontHandRight); Children.Insert(2,writeRearLeft); Children.Insert(3,writeRearRight); Children.Add(writeFrontLeft); Children.Add(writeFrontRight);
-  var notebook=new Canvas { Width=d*0.42, Height=d*0.50, RenderTransformOrigin=new Point(0.5,0.5), RenderTransform=new RotateTransform(-8) }; SetLeft(notebook,-0.01*d); SetTop(notebook,0.53*d); writeFrontLeft.Children.Add(notebook);
-  var paper=new Border { Width=d*0.42, Height=d*0.50, Background=Palette.Make("#F4F1E8"), CacheMode=new BitmapCache(), CornerRadius=new CornerRadius(0.05*d) }; notebook.Children.Add(paper);
-  var spine=new Border { Width=d*0.07, Height=d*0.50, Background=Palette.Accent, CornerRadius=new CornerRadius(0.05*d,0,0,0.05*d) }; notebook.Children.Add(spine);
-  // 手与本子共用球体的色相，换色后会同步刷新。
-  spine.Background=WriteSpine();
-  var inkScales=new List<ScaleTransform>(); double[] lengths={0.23,0.18,0.25}; for(int i=0;i<3;i++) { var scale=new ScaleTransform(0,1); inkScales.Add(scale); var line=new System.Windows.Shapes.Rectangle { Width=d*lengths[i], Height=Math.Max(0.8,d*0.03), Fill=Palette.Make("#5A5A64"), RadiusX=d*0.015, RadiusY=d*0.015, RenderTransform=scale }; SetLeft(line,d*0.12); SetTop(line,d*(0.12+0.10*i)); notebook.Children.Add(line); }
-  var pen=new Canvas { Width=d, Height=d }; var penRotation=new RotateTransform(0,d*0.7,d*0.55); pen.RenderTransform=penRotation; writeFrontRight.Children.Add(pen);
-  var stem=new System.Windows.Shapes.Line { X1=d*0.20, Y1=d*0.91, X2=d*0.79, Y2=d*0.43, Stroke=Palette.Make("#3A3A40"), StrokeThickness=Math.Max(1,d*0.04), StrokeStartLineCap=PenLineCap.Round, StrokeEndLineCap=PenLineCap.Round }; pen.Children.Add(stem);
-  var feather=new StreamGeometry(); using(var c=feather.Open()) { c.BeginFigure(new Point(d*0.49,d*0.72),true,true); c.BezierTo(new Point(d*0.46,d*0.49),new Point(d*0.69,d*0.31),new Point(d*0.83,d*0.34),true,false); c.BezierTo(new Point(d*0.86,d*0.48),new Point(d*0.69,d*0.67),new Point(d*0.49,d*0.72),true,false); } pen.Children.Add(new System.Windows.Shapes.Path { Data=feather, Fill=Brushes.White, CacheMode=new BitmapCache() }); pen.Children.Add(new System.Windows.Shapes.Line { X1=d*0.52,Y1=d*0.69,X2=d*0.77,Y2=d*0.40,Stroke=Palette.Make("#A1A1A7"),StrokeThickness=Math.Max(0.6,d*0.018) });
-  var back=new BackEase { Amplitude=0.4,EasingMode=EasingMode.EaseOut }; var retract=new CubicEase { EasingMode=EasingMode.EaseIn };
-  foreach(var transform in new[]{leftScaleWrite}) foreach(var property in new[]{ScaleTransform.ScaleXProperty,ScaleTransform.ScaleYProperty}) { var frames=new DoubleAnimationUsingKeyFrames(); frames.KeyFrames.Add(new LinearDoubleKeyFrame(0,KeyTime.FromTimeSpan(TimeSpan.Zero))); frames.KeyFrames.Add(new EasingDoubleKeyFrame(1,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(0.22)),back)); frames.KeyFrames.Add(new LinearDoubleKeyFrame(1,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(3.3)))); frames.KeyFrames.Add(new EasingDoubleKeyFrame(0,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(3.6)),retract)); AddWriteAnimation(transform,property,frames); }
-  var motion=new DoubleAnimationUsingKeyFrames(); double[] times={0,0.22,0.82,0.85,1.45,1.48,2.08,2.11,2.71,3,3.6}; double[] positions={0,-0.12,0.16,-0.12,0.16,-0.12,0.16,-0.12,0.16,0.16,0.16}; for(int i=0;i<times.Length;i++) motion.KeyFrames.Add(new LinearDoubleKeyFrame(positions[i]*d,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(times[i])))); AddWriteAnimation(move,TranslateTransform.XProperty,motion);
-  var tilt=new DoubleAnimationUsingKeyFrames(); for(int i=0;i<times.Length;i++) tilt.KeyFrames.Add(new LinearDoubleKeyFrame(i%2==0?-8:8,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(times[i])))); AddWriteAnimation(penRotation,RotateTransform.AngleProperty,tilt);
-  for(int i=0;i<3;i++) { var ink=new DoubleAnimationUsingKeyFrames(); double start=0.3+i*0.65; ink.KeyFrames.Add(new LinearDoubleKeyFrame(0,KeyTime.FromTimeSpan(TimeSpan.Zero))); ink.KeyFrames.Add(new LinearDoubleKeyFrame(0,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(start)))); ink.KeyFrames.Add(new LinearDoubleKeyFrame(1,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(start+0.6)))); AddWriteAnimation(inkScales[i],ScaleTransform.ScaleXProperty,ink); }
+  StopWrite(); double d=Diameter;
+  // 藏匿位置（相对写字姿势的平移量，单位 D）：所有像素都落在球体圆盘内。
+  const double hiddenLx=0.272, hiddenLy=-0.238, hiddenRx=-0.081, hiddenRy=-0.115;
+  // 抽出后的位置：在球体轮廓外，且离圆盘留一点余量，换层时不会擦到球体边缘。
+  const double outLx=-0.30, outLy=0.54, outRx=0.34, outRy=0.76;
+  // 时间线：共 4.3 秒。0.44 秒抽到外面，0.44–0.56 停住换层，0.56–0.84 摆好，
+  // 0.90–3.18 写字，3.60–4.00 退回外面，4.02 换回球后，4.06–4.30 塞进去。
+  const double extractEnd=0.44, extractHold=0.56, swapFront=0.50, settleEnd=0.84;
+  const double stowStart=3.60, outEnd=4.00, swapBack=4.02, holdIn=4.06, total=4.30;
+  const double startScale=0.85;
+  var easeOut=new CubicEase { EasingMode=EasingMode.EaseOut };
+  var easeIn=new CubicEase { EasingMode=EasingMode.EaseIn };
+  var easeInOut=new CubicEase { EasingMode=EasingMode.EaseInOut };
+  var back=new BackEase { Amplitude=0.3, EasingMode=EasingMode.EaseOut };
+  writeRearLeft=WriteCanvas(); writeRearRight=WriteCanvas(); writeFrontLeft=WriteCanvas(); writeFrontRight=WriteCanvas();
+  // 起播时 rear 一套可见但被球挡住，front 一套先不显示。
+  writeRearLeft.Visibility=writeRearRight.Visibility=Visibility.Visible;
+  writeFrontLeft.Visibility=writeFrontRight.Visibility=Visibility.Hidden;
+  var leftScaleWrite=new ScaleTransform(startScale,startScale,d*0.5,d*0.5);
+  var leftMoveWrite=new TranslateTransform(hiddenLx*d,hiddenLy*d);
+  var leftTransform=new TransformGroup(); leftTransform.Children.Add(leftScaleWrite); leftTransform.Children.Add(leftMoveWrite);
+  var rightScaleWrite=new ScaleTransform(startScale,startScale,d*0.5,d*0.5);
+  var rightMoveWrite=new TranslateTransform(hiddenRx*d,hiddenRy*d);
+  var rightWriteMove=new TranslateTransform();
+  var rightTransform=new TransformGroup(); rightTransform.Children.Add(rightScaleWrite); rightTransform.Children.Add(rightMoveWrite); rightTransform.Children.Add(rightWriteMove);
+  writeRearLeft.RenderTransform=writeFrontLeft.RenderTransform=leftTransform;
+  writeRearRight.RenderTransform=writeFrontRight.RenderTransform=rightTransform;
+  // 两套内容共用同一组变换（字迹、笔身角度），所以换层前后姿态完全一致。
+  var inkScales=new List<ScaleTransform>(); for(int i=0;i<3;i++) inkScales.Add(new ScaleTransform(0,1));
+  BuildLeftContent(writeRearLeft,d,inkScales); BuildLeftContent(writeFrontLeft,d,inkScales);
+  var penRotation=new RotateTransform(0,d*0.7,d*0.55);
+  BuildRightContent(writeRearRight,d,penRotation); BuildRightContent(writeFrontRight,d,penRotation);
+  Children.Insert(1,writeRearLeft); Children.Insert(2,writeRearRight); Children.Add(writeFrontLeft); Children.Add(writeFrontRight);
+  // 两个手和两套道具不是从 0 缩放蹦出来，而是在 0.85→1 的轻微放大中平移出来。
+  foreach(var scale in new[]{leftScaleWrite,rightScaleWrite}) foreach(var property in new[]{ScaleTransform.ScaleXProperty,ScaleTransform.ScaleYProperty}) {
+   var frames=new DoubleAnimationUsingKeyFrames { Duration=TimeSpan.FromSeconds(total) };
+   frames.KeyFrames.Add(new LinearDoubleKeyFrame(startScale,KeyTime.FromTimeSpan(TimeSpan.Zero)));
+   frames.KeyFrames.Add(new EasingDoubleKeyFrame(1,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(extractEnd)),easeOut));
+   frames.KeyFrames.Add(new LinearDoubleKeyFrame(1,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(holdIn))));
+   frames.KeyFrames.Add(new EasingDoubleKeyFrame(startScale,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(total)),easeIn));
+   AddWriteAnimation(scale,property,frames);
+  }
+  var leftX=MoveFrames(hiddenLx*d,outLx*d,total,extractEnd,extractHold,settleEnd,stowStart,outEnd,holdIn,easeOut,easeInOut,easeIn,back);
+  var leftY=MoveFrames(hiddenLy*d,outLy*d,total,extractEnd,extractHold,settleEnd,stowStart,outEnd,holdIn,easeOut,easeInOut,easeIn,back);
+  AddWriteAnimation(leftMoveWrite,TranslateTransform.XProperty,leftX);
+  AddWriteAnimation(leftMoveWrite,TranslateTransform.YProperty,leftY);
+  var rightX=MoveFrames(hiddenRx*d,outRx*d,total,extractEnd,extractHold,settleEnd,stowStart,outEnd,holdIn,easeOut,easeInOut,easeIn,back);
+  var rightY=MoveFrames(hiddenRy*d,outRy*d,total,extractEnd,extractHold,settleEnd,stowStart,outEnd,holdIn,easeOut,easeInOut,easeIn,back);
+  AddWriteAnimation(rightMoveWrite,TranslateTransform.XProperty,rightX);
+  AddWriteAnimation(rightMoveWrite,TranslateTransform.YProperty,rightY);
+  // 写字时笔尖沿本子来回三趟；整只手跟着笔一起轻轻移动，和原来的运笔节奏一致。
+  var motion=new DoubleAnimationUsingKeyFrames { Duration=TimeSpan.FromSeconds(total) }; double[] times={0,0.90,1.12,1.72,1.75,2.35,2.38,2.98,3.18,stowStart,total}; double[] positions={0,0,-0.12,0.16,-0.12,0.16,-0.12,0.16,0.16,0.16,0.16};
+  for(int i=0;i<times.Length;i++) motion.KeyFrames.Add(new LinearDoubleKeyFrame(positions[i]*d,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(times[i]))));
+  AddWriteAnimation(rightWriteMove,TranslateTransform.XProperty,motion);
+  var tilt=new DoubleAnimationUsingKeyFrames { Duration=TimeSpan.FromSeconds(total) }; double[] tiltTimes={0,0.90,1.12,1.72,1.75,2.35,2.38,2.98,3.18,stowStart,total}; double[] tiltValues={0,0,-8,8,-8,8,-8,8,8,0,0};
+  for(int i=0;i<tiltTimes.Length;i++) tilt.KeyFrames.Add(new LinearDoubleKeyFrame(tiltValues[i],KeyTime.FromTimeSpan(TimeSpan.FromSeconds(tiltTimes[i]))));
+  AddWriteAnimation(penRotation,RotateTransform.AngleProperty,tilt);
+  for(int i=0;i<3;i++) {
+   var ink=new DoubleAnimationUsingKeyFrames { Duration=TimeSpan.FromSeconds(total) }; double start=1.0+i*0.65;
+   ink.KeyFrames.Add(new LinearDoubleKeyFrame(0,KeyTime.FromTimeSpan(TimeSpan.Zero)));
+   ink.KeyFrames.Add(new LinearDoubleKeyFrame(0,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(start))));
+   ink.KeyFrames.Add(new LinearDoubleKeyFrame(1,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(start+0.6))));
+   AddWriteAnimation(inkScales[i],ScaleTransform.ScaleXProperty,ink);
+  }
+  // 换层：0.50 秒 rear→front，4.02 秒 front→rear。两套内容此刻在同一位置，
+  // 而且都与球体没有重叠，切换只改变绘制层，不改变画面。
+  AddWriteAnimation(writeRearLeft,UIElement.VisibilityProperty,VisibilityFrames(true,swapFront,swapBack,total));
+  AddWriteAnimation(writeRearRight,UIElement.VisibilityProperty,VisibilityFrames(true,swapFront,swapBack,total));
+  AddWriteAnimation(writeFrontLeft,UIElement.VisibilityProperty,VisibilityFrames(false,swapFront,swapBack,total));
+  AddWriteAnimation(writeFrontRight,UIElement.VisibilityProperty,VisibilityFrames(false,swapFront,swapBack,total));
   writeClocks[0].Completed+=(sender,args)=> { if(!writeSeeking) { StopWrite(); if(done!=null) done(); } };
  }
+
+ DoubleAnimationUsingKeyFrames MoveFrames(double hidden,double outPos,double total,double extractEnd,double extractHold,double settleEnd,double stowStart,double outEnd,double holdIn,IEasingFunction easeOut,IEasingFunction easeInOut,IEasingFunction easeIn,IEasingFunction back) {
+  var a=new DoubleAnimationUsingKeyFrames { Duration=TimeSpan.FromSeconds(total) };
+  a.KeyFrames.Add(new LinearDoubleKeyFrame(hidden,KeyTime.FromTimeSpan(TimeSpan.Zero)));
+  a.KeyFrames.Add(new EasingDoubleKeyFrame(outPos,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(extractEnd)),easeOut));
+  a.KeyFrames.Add(new LinearDoubleKeyFrame(outPos,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(extractHold))));
+  a.KeyFrames.Add(new EasingDoubleKeyFrame(0,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(settleEnd)),back));
+  a.KeyFrames.Add(new LinearDoubleKeyFrame(0,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(stowStart))));
+  a.KeyFrames.Add(new EasingDoubleKeyFrame(outPos,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(outEnd)),easeInOut));
+  a.KeyFrames.Add(new LinearDoubleKeyFrame(outPos,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(holdIn))));
+  a.KeyFrames.Add(new EasingDoubleKeyFrame(hidden,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(total)),easeIn));
+  return a;
+ }
+ ObjectAnimationUsingKeyFrames VisibilityFrames(bool rear,double swapFront,double swapBack,double total) {
+  var a=new ObjectAnimationUsingKeyFrames { Duration=TimeSpan.FromSeconds(total) };
+  a.KeyFrames.Add(new DiscreteObjectKeyFrame(rear?Visibility.Visible:Visibility.Hidden,KeyTime.FromTimeSpan(TimeSpan.Zero)));
+  a.KeyFrames.Add(new DiscreteObjectKeyFrame(rear?Visibility.Hidden:Visibility.Visible,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(swapFront))));
+  a.KeyFrames.Add(new DiscreteObjectKeyFrame(rear?Visibility.Visible:Visibility.Hidden,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(swapBack))));
+  return a;
+ }
+ void BuildLeftContent(Canvas layer,double d,List<ScaleTransform> inkScales) {
+  layer.Children.Add(Hand(d,0.08,0.80));
+  var notebook=new Canvas { Width=d*0.42, Height=d*0.50, RenderTransformOrigin=new Point(0.5,0.5), RenderTransform=new RotateTransform(-8) };
+  SetLeft(notebook,-0.01*d); SetTop(notebook,0.53*d);
+  var paper=new Border { Width=d*0.42, Height=d*0.50, Background=Palette.Make("#F4F1E8"), BorderBrush=Palette.Make("#D9D3C4"), BorderThickness=new Thickness(Math.Max(0.5,d*0.006)), CacheMode=new BitmapCache(), CornerRadius=new CornerRadius(0.05*d) }; notebook.Children.Add(paper);
+  var spine=new Border { Width=d*0.07, Height=d*0.50, Background=WriteSpine(), CornerRadius=new CornerRadius(0.05*d,0,0,0.05*d) }; notebook.Children.Add(spine);
+  double[] lengths={0.23,0.18,0.25};
+  for(int i=0;i<3;i++) {
+   var line=new System.Windows.Shapes.Rectangle { Width=d*lengths[i], Height=Math.Max(0.8,d*0.03), Fill=Palette.Make("#5A5A64"), RadiusX=d*0.015, RadiusY=d*0.015, RenderTransform=inkScales[i] };
+   SetLeft(line,d*0.12); SetTop(line,d*(0.12+0.10*i)); notebook.Children.Add(line);
+  }
+  layer.Children.Add(notebook);
+ }
+ void BuildRightContent(Canvas layer,double d,RotateTransform penRotation) {
+  layer.Children.Add(Hand(d,0.90,0.72));
+  var pen=new Canvas { Width=d, Height=d, RenderTransform=penRotation };
+  var stem=new System.Windows.Shapes.Line { X1=d*0.20, Y1=d*0.91, X2=d*0.79, Y2=d*0.43, Stroke=Palette.Make("#3A3A40"), StrokeThickness=Math.Max(1,d*0.04), StrokeStartLineCap=PenLineCap.Round, StrokeEndLineCap=PenLineCap.Round }; pen.Children.Add(stem);
+  var feather=new StreamGeometry(); using(var c=feather.Open()) { c.BeginFigure(new Point(d*0.49,d*0.72),true,true); c.BezierTo(new Point(d*0.46,d*0.49),new Point(d*0.69,d*0.31),new Point(d*0.83,d*0.34),true,false); c.BezierTo(new Point(d*0.86,d*0.48),new Point(d*0.69,d*0.67),new Point(d*0.49,d*0.72),true,false); } pen.Children.Add(new System.Windows.Shapes.Path { Data=feather, Fill=Brushes.White, CacheMode=new BitmapCache() }); pen.Children.Add(new System.Windows.Shapes.Line { X1=d*0.52,Y1=d*0.69,X2=d*0.77,Y2=d*0.40,Stroke=Palette.Make("#A1A1A7"),StrokeThickness=Math.Max(0.6,d*0.018) });
+  layer.Children.Add(pen);
+ }
  Canvas WriteCanvas() { return new Canvas { Width=Diameter, Height=Diameter, ClipToBounds=false, IsHitTestVisible=false }; }
- System.Windows.Shapes.Ellipse Hand(double d,double x,double y) { var hand=new System.Windows.Shapes.Ellipse { Width=d*0.26, Height=d*0.26, Fill=ball.Fill, CacheMode=new BitmapCache(), Stroke=Palette.Make("#4A4644"), StrokeThickness=Math.Max(0.5,d*0.02) }; SetLeft(hand,d*x-d*0.13); SetTop(hand,d*y-d*0.13); return hand; }
- Brush WriteSpine() { var brush=ball.Fill as DrawingBrush; var drawings=brush==null?null:brush.Drawing as DrawingGroup; var geom=drawings==null?null:drawings.Children[0] as GeometryDrawing; var gradient=geom==null?null:geom.Brush as RadialGradientBrush; Color c=gradient==null?Colors.SteelBlue:gradient.GradientStops[0].Color; return new SolidColorBrush(Palette.Mix(c,Colors.Black,0.5)); }
- void AddWriteAnimation(DependencyObject target,DependencyProperty property,DoubleAnimationUsingKeyFrames animation) { Timeline.SetDesiredFrameRate(animation,60); var clock=(AnimationClock)animation.CreateClock(true); var animatable=(Animatable)target; animatable.ApplyAnimationClock(property,clock); writeClocks.Add(clock); writeTargets.Add(animatable); writeProperties.Add(property); }
+ System.Windows.Shapes.Ellipse Hand(double d,double x,double y) { var hand=new System.Windows.Shapes.Ellipse { Width=d*0.26, Height=d*0.26, Fill=ball.Fill, CacheMode=new BitmapCache(), Stroke=HandEdge(), StrokeThickness=Math.Max(0.4,d*0.008) }; SetLeft(hand,d*x-d*0.13); SetTop(hand,d*y-d*0.13); writeHands.Add(hand); return hand; }
+ Color BallColor() { var brush=ball.Fill as DrawingBrush; var drawings=brush==null?null:brush.Drawing as DrawingGroup; var geom=drawings==null?null:drawings.Children[0] as GeometryDrawing; var gradient=geom==null?null:geom.Brush as RadialGradientBrush; return gradient==null?Colors.SteelBlue:gradient.GradientStops[0].Color; }
+ Brush WriteSpine() { return new SolidColorBrush(Palette.Mix(BallColor(),Colors.Black,0.5)); }
+ Brush HandEdge() { return new SolidColorBrush(Palette.Mix(BallColor(),Colors.White,0.55)); }
+ void AddWriteAnimation(DependencyObject target,DependencyProperty property,Timeline animation) { Timeline.SetDesiredFrameRate(animation,60); var clock=(AnimationClock)animation.CreateClock(true); var animatable=(IAnimatable)target; animatable.ApplyAnimationClock(property,clock); writeClocks.Add(clock); writeTargets.Add(animatable); writeProperties.Add(property); }
  public void SeekWrite(double seconds) { writeSeeking=true; foreach(var clock in writeClocks.ToArray()) { clock.Controller.Pause(); clock.Controller.SeekAlignedToLastTick(TimeSpan.FromSeconds(seconds),TimeSeekOrigin.BeginTime); } }
- public void StopWrite() { writeSeeking=false; for(int i=0;i<writeClocks.Count;i++) { writeTargets[i].ApplyAnimationClock(writeProperties[i],null); writeClocks[i].Controller.Stop(); } writeClocks.Clear(); writeTargets.Clear(); writeProperties.Clear(); foreach(var layer in new[]{writeRearLeft,writeRearRight,writeFrontLeft,writeFrontRight}) if(layer!=null) Children.Remove(layer); writeRearLeft=writeRearRight=writeFrontLeft=writeFrontRight=null; writeHandLeft=writeHandRight=writeFrontHandLeft=writeFrontHandRight=null; }
+ public void StopWrite() { writeSeeking=false; for(int i=0;i<writeClocks.Count;i++) { writeTargets[i].ApplyAnimationClock(writeProperties[i],null); writeClocks[i].Controller.Stop(); } writeClocks.Clear(); writeTargets.Clear(); writeProperties.Clear(); writeHands.Clear(); foreach(var layer in new[]{writeRearLeft,writeRearRight,writeFrontLeft,writeFrontRight}) if(layer!=null) Children.Remove(layer); writeRearLeft=writeRearRight=writeFrontLeft=writeFrontRight=null; }
+
  public void Reset() { floating.BeginAnimation(TranslateTransform.YProperty,null); floating.Y=0; ballScale.BeginAnimation(ScaleTransform.ScaleXProperty,null); ballScale.BeginAnimation(ScaleTransform.ScaleYProperty,null); ballScale.ScaleX=ballScale.ScaleY=1; glow.BeginAnimation(UIElement.OpacityProperty,null); glow.Opacity=0.45; gaze.BeginAnimation(TranslateTransform.XProperty,null); gaze.BeginAnimation(TranslateTransform.YProperty,null); gaze.X=gaze.Y=0; leftScale.BeginAnimation(ScaleTransform.ScaleYProperty,null); rightScale.BeginAnimation(ScaleTransform.ScaleYProperty,null); leftScale.ScaleY=rightScale.ScaleY=1; }
 }
 
@@ -2502,9 +2600,11 @@ class MainWindow : Window {
   ArmWriteLift(); return true;
  }
  void StartPreviewWriting() { if(!previewBotOn || dotPreview==null || dotPreview.writeClocks.Count>0) return; LookBot(dotPreview,-0.08,0.08,220); dotPreview.StartWrite(null); ArmWriteLift(); }
- void ArmWriteLift() { if(writeLift==null) { writeLift=new DispatcherTimer { Interval=TimeSpan.FromSeconds(3) }; writeLift.Tick+=(sender,args)=> { writeLift.Stop(); if(writing) { LookBot(bot,0,0,300); BlinkBot(bot,false,false); } if(previewBotOn && dotPreview.writeClocks.Count>0) { LookBot(dotPreview,0,0,300); BlinkBot(dotPreview,false,false); } }; } writeLift.Stop(); writeLift.Start(); }
+ void ArmWriteLift() { if(writeLift==null) { writeLift=new DispatcherTimer { Interval=TimeSpan.FromSeconds(3.3) }; writeLift.Tick+=(sender,args)=> { writeLift.Stop(); if(writing) { LookBot(bot,0,0,300); BlinkBot(bot,false,false); } if(previewBotOn && dotPreview.writeClocks.Count>0) { LookBot(dotPreview,0,0,300); BlinkBot(dotPreview,false,false); } }; } writeLift.Stop(); writeLift.Start(); }
 
- void StopWriting() { if(writeDelay!=null) writeDelay.Stop(); if(writeLift!=null) writeLift.Stop(); if(bot!=null) bot.StopWrite(); if(writing && bot!=null) { bot.gaze.BeginAnimation(TranslateTransform.XProperty,null); bot.gaze.BeginAnimation(TranslateTransform.YProperty,null); bot.gaze.X=bot.gaze.Y=0; } writing=false; }
+ void StopWriting() { if(writeDelay!=null) writeDelay.Stop(); if(writeLift!=null) writeLift.Stop(); if(bot!=null) { bot.StopWrite(); ResetWriteEyes(bot); } if(dotPreview!=null) { bool previewWriting=dotPreview.writeClocks.Count>0; dotPreview.StopWrite(); if(previewWriting) { ResetWriteEyes(dotPreview); ResetWriteGaze(dotPreview); } } if(writing && bot!=null) ResetWriteGaze(bot); writing=false; }
+ static void ResetWriteEyes(BotVisual b) { b.leftScale.BeginAnimation(ScaleTransform.ScaleYProperty,null); b.rightScale.BeginAnimation(ScaleTransform.ScaleYProperty,null); b.leftScale.ScaleY=b.rightScale.ScaleY=1; }
+ static void ResetWriteGaze(BotVisual b) { b.gaze.BeginAnimation(TranslateTransform.XProperty,null); b.gaze.BeginAnimation(TranslateTransform.YProperty,null); b.gaze.X=b.gaze.Y=0; }
  void FadeDot(double to,int ms,int delayMs) { var a=Anim(dotLayer.Opacity,to,TimeSpan.FromMilliseconds(ms),null); a.BeginTime=TimeSpan.FromMilliseconds(delayMs); dotLayer.BeginAnimation(OpacityProperty,a); }
  void StopMotion() {
   if(springOn) StopSpring();
