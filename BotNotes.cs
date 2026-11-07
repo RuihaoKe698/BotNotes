@@ -123,10 +123,10 @@ class BotVisual : Canvas {
   double x1=d*(0.5-0.21)-w/2, x2=d*(0.5+0.08)-w/2, y=d*(0.5-0.245)-h/2;
   if(d<=20) { x1=Math.Round(x1); x2=Math.Round(x2); y=Math.Round(y); RenderOptions.SetEdgeMode(leftEye,EdgeMode.Aliased); RenderOptions.SetEdgeMode(rightEye,EdgeMode.Aliased); } else { RenderOptions.SetEdgeMode(leftEye,EdgeMode.Unspecified); RenderOptions.SetEdgeMode(rightEye,EdgeMode.Unspecified); }
   SetLeft(leftEye,x1); SetLeft(rightEye,x2); SetTop(leftEye,y); SetTop(rightEye,y);
-  SetDragShape(leftDrag,d,-0.21+0.03,true); SetDragShape(rightDrag,d,0.08-0.03,false);
+  SetDragShape(leftDrag,d,-0.21,true); SetDragShape(rightDrag,d,0.08,false); // ><：各自放在眼睛的位置，中间留出空隙
  }
  void SetDragShape(System.Windows.Shapes.Path path,double d,double x,bool left) {
-  double w=d*0.16*Math.Cos(35*Math.PI/180), h=d*0.16*Math.Sin(35*Math.PI/180); var g=new StreamGeometry(); using(var c=g.Open()) { c.BeginFigure(new Point(left?0:w,0),false,false); c.LineTo(new Point(left?w:0,h),true,false); c.LineTo(new Point(left?0:w,h*2),true,false); } path.Data=g; path.StrokeThickness=Math.Max(1.2,0.075*d); SetLeft(path,d*(0.5+x)-w/2); SetTop(path,d*(0.5-0.245)-h);
+  double arm=Math.Max(2.4,d*0.11), w=arm*Math.Cos(35*Math.PI/180), h=arm*Math.Sin(35*Math.PI/180); var g=new StreamGeometry(); using(var c=g.Open()) { c.BeginFigure(new Point(left?0:w,0),false,false); c.LineTo(new Point(left?w:0,h),true,false); c.LineTo(new Point(left?0:w,h*2),true,false); } path.Data=g; path.StrokeThickness=Math.Max(1.2,0.06*d); SetLeft(path,d*(0.5+x)-w/2); SetTop(path,d*(0.5-0.245)-h);
  }
  public void SetDragFace(bool active,bool animate,Action finished) {
   int generation=++faceGeneration; if(!animate) { leftEye.Visibility=rightEye.Visibility=active?Visibility.Collapsed:Visibility.Visible; leftDrag.Visibility=rightDrag.Visibility=active?Visibility.Visible:Visibility.Collapsed; if(finished!=null) finished(); return; }
