@@ -25,7 +25,7 @@ class App : Application {
    // 旧版（DotNotes 或更早的 NotchNotes）还开着时不能搬数据文件夹，否则它之后保存的内容会写回旧文件夹
    string oldName=NotchNotesWindows.MainWindow.OldVersionRunning(); if(oldName!=null) { NotchNotesWindows.MainWindow.Notice("旧版 "+oldName+" 还在运行。请先在通知区域右键它的图标选“退出”，再打开 BotNotes。笔记会自动搬过来。"); return; }
    NotchNotesWindows.MainWindow.MigrateOldVersions(); NotchNotesWindows.MainWindow.FixAutoStartPath();
-   var app = new App(); app.ShutdownMode=ShutdownMode.OnExplicitShutdown; app.Run(new MainWindow());
+   var app = new App(); app.ShutdownMode=ShutdownMode.OnExplicitShutdown; CrashLog.Install(app); app.Run(new MainWindow());
   }
  }
 }

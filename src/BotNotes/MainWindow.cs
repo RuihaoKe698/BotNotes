@@ -149,7 +149,7 @@ partial class MainWindow : Window {
   pinButton=Ui.Button(Ui.Icon(G_Pin,14),""); pinButton.Width=30; pinButton.Padding=new Thickness(0); pinButton.Margin=new Thickness(0,0,2,0); pinButton.Click+=(s,e)=> { pinned=!pinned; if(pinned) transient=false; SaveSettings(); ShowPinState(); }; DockPanel.SetDock(pinButton,Dock.Right); header.Children.Add(pinButton); ShowPinState();
   settingsButton=Ui.Button(Ui.Icon(G_Settings,14),"设置"); settingsButton.Width=30; settingsButton.Padding=new Thickness(0); settingsButton.Margin=new Thickness(0,0,2,0); settingsButton.Foreground=Palette.Muted; settingsButton.Click+=(s,e)=> { if(settingsOpen) CloseSettings(); else OpenSettings(); }; DockPanel.SetDock(settingsButton,Dock.Right); header.Children.Add(settingsButton);
   fsButton=Ui.Button(Ui.Icon(G_Full,13),""); fsButton.Width=30; fsButton.Padding=new Thickness(0); fsButton.Margin=new Thickness(0,0,2,0); fsButton.Foreground=Palette.Muted; fsButton.Click+=(s,e)=>SetFullscreen(!fullscreen); DockPanel.SetDock(fsButton,Dock.Right); header.Children.Add(fsButton); ShowFullscreenState();
-  sleepButton=Ui.Button(null,""); sleepButton.Margin=new Thickness(0,0,4,0); sleepButton.Click+=(s,e)=>ToggleSleep(); DockPanel.SetDock(sleepButton,Dock.Right); header.Children.Add(sleepButton); ShowSleepState();
+  sleepButton=Ui.Button(null,""); sleepButton.Width=30; sleepButton.Padding=new Thickness(0); sleepButton.Margin=new Thickness(0,0,2,0); sleepButton.Click+=(s,e)=>ToggleSleep(); DockPanel.SetDock(sleepButton,Dock.Right); header.Children.Add(sleepButton); ShowSleepState();
   var seg=new Border { Background=Palette.Surface, CornerRadius=new CornerRadius(8), Padding=new Thickness(2) };
   var segRow=new StackPanel { Orientation=Orientation.Horizontal }; seg.Child=segRow;
   editTab=Ui.Button("编辑","编辑 Markdown 源码 (Ctrl+E)",new CornerRadius(6)); editTab.Height=26; editTab.Padding=new Thickness(14,0,14,0); editTab.Click+=(s,e)=> { CloseSettings(); SetPreview(false); }; segRow.Children.Add(editTab);
@@ -212,12 +212,11 @@ partial class MainWindow : Window {
   mapFitBtn=Ui.Button(Ui.IconLabel(G_Fit,"适应窗口"),"缩放到合适大小并居中 (Ctrl+0)"); mapFitBtn.Height=28; mapFitBtn.Focusable=false; mapFitBtn.Foreground=Palette.Muted; mapFitBtn.Click+=(s,e)=> { mapMoved=false; FitMap(); }; mapBar.Children.Add(mapFitBtn);
   mapCopyBtn=Ui.Button(Ui.IconLabel(G_Copy,"复制图片"),"把整张脑图复制成图片，可以直接粘贴到聊天、文档或幻灯片里"); mapCopyBtn.Height=28; mapCopyBtn.Focusable=false; mapCopyBtn.Foreground=Palette.Muted; mapCopyBtn.Margin=new Thickness(2,0,0,0); mapCopyBtn.Click+=(s,e)=>CopyMapImage(); mapBar.Children.Add(mapCopyBtn);
   mapSaveBtn=Ui.Button(Ui.IconLabel(G_Export,"导出图片…"),"把整张脑图保存成 PNG 图片"); mapSaveBtn.Height=28; mapSaveBtn.Focusable=false; mapSaveBtn.Foreground=Palette.Muted; mapSaveBtn.Margin=new Thickness(2,0,0,0); mapSaveBtn.Click+=(s,e)=>ExportMap(); mapBar.Children.Add(mapSaveBtn);
-  { var head=new StackPanel { Orientation=Orientation.Horizontal }; head.Children.Add(new TextBlock { Text="H", FontSize=14.5, FontWeight=FontWeights.SemiBold, VerticalAlignment=VerticalAlignment.Center });
-    var chev=Ui.Icon("\uE70D",7); chev.Margin=new Thickness(3,2,0,0); chev.VerticalAlignment=VerticalAlignment.Center; head.Children.Add(chev);
-    var hb=Ui.Button(head,"标题：一级 Ctrl+1 · 二级 Ctrl+2 · 三级 Ctrl+3 · 正文 Ctrl+0"); hb.Width=38; hb.Padding=new Thickness(0); hb.Foreground=Palette.Muted; hb.Margin=new Thickness(0,0,2,0); hb.Focusable=false; hb.Click+=(s,e)=>ShowHeadMenu(hb); toolbar.Children.Add(hb); }
-  AddTool(Ui.Icon("\uE8DD",14),"粗体 (Ctrl+B)","**","**",null); AddTool(Ui.Icon("\uE8DB",14),"斜体 (Ctrl+I)","*","*",null); AddTool(Ui.Icon("\uEDE0",14),"删除线","~~","~~",null); AddTool(Ui.Icon("\uE943",14),"行内代码","`","`",null); AddTool(Ui.Icon("\uE71B",14),"链接","[","](https://)",null);
+  // 格式按钮都用自绘线条图标（LineIcon），粗细、大小一致。
+  { var hb=Ui.Button(LineIcon.Heading(),"标题：一级 Ctrl+1 · 二级 Ctrl+2 · 三级 Ctrl+3 · 正文 Ctrl+0"); hb.Width=38; hb.Padding=new Thickness(0); hb.Foreground=Palette.Muted; hb.Margin=new Thickness(0,0,2,0); hb.Focusable=false; hb.Click+=(s,e)=>ShowHeadMenu(hb); toolbar.Children.Add(hb); }
+  AddTool(LineIcon.Make(LineIcon.Bold),"粗体 (Ctrl+B)","**","**",null); AddTool(LineIcon.Make(LineIcon.Italic),"斜体 (Ctrl+I)","*","*",null); AddTool(LineIcon.Make(LineIcon.Strike),"删除线","~~","~~",null); AddTool(LineIcon.Make(LineIcon.Code),"行内代码","`","`",null); AddTool(LineIcon.Make(LineIcon.Link),"链接","[","](https://)",null);
   toolbar.Children.Add(new Border { Width=1, Height=16, Background=Palette.Line, Margin=new Thickness(5,0,7,0), VerticalAlignment=VerticalAlignment.Center });
-  AddTool(Ui.Icon("\uE9B2",13),"引用（对选中的每一行生效）",null,null,"quote"); AddTool(Ui.Icon("\uE8FD",14),"无序列表（对选中的每一行生效）",null,null,"bullet"); AddTool(NumberedIcon(),"有序列表（对选中的每一行生效）",null,null,"number"); AddTool(Ui.Icon("\uE9D5",14),"待办事项（对选中的每一行生效）",null,null,"task");
+  AddTool(LineIcon.Make(LineIcon.Quote),"引用（对选中的每一行生效）",null,null,"quote"); AddTool(LineIcon.Make(LineIcon.Bullets,LineIcon.BulletDots),"无序列表（对选中的每一行生效）",null,null,"bullet"); AddTool(LineIcon.Make(LineIcon.Numbers),"有序列表（对选中的每一行生效）",null,null,"number"); AddTool(LineIcon.Make(LineIcon.Tasks),"待办事项（对选中的每一行生效）",null,null,"task");
 
   // 文件暂存
   var caption=shelfCaption=new StackPanel { Orientation=Orientation.Horizontal, Margin=new Thickness(2,16,2,8) }; Grid.SetRow(caption,3); panel.Children.Add(caption);
@@ -306,14 +305,6 @@ partial class MainWindow : Window {
   // 颜色直接写进模板（模板里引用的画刷会被冻结，没法改色）；换背景色时整个样式重建。
   xaml=xaml.Replace("THUMB",Palette.ToHex(Palette.Thumb.Color)).Replace("HOVER",Palette.ToHex(Palette.ThumbHover.Color)).Replace("DRAG",Palette.ToHex(Palette.ThumbDrag.Color));
   return (Style)System.Windows.Markup.XamlReader.Parse(xaml);
- }
- static FrameworkElement NumberedIcon() {
-  var g=new Grid { Width=16, Height=16 };
-  Func<string,double,TextBlock> num=(t,top)=>new TextBlock { Text=t, FontSize=7.5, FontWeight=FontWeights.SemiBold, FontFamily=new FontFamily("Segoe UI"), Margin=new Thickness(0,top,0,0), VerticalAlignment=VerticalAlignment.Top };
-  Func<double,System.Windows.Shapes.Rectangle> line=top=>new System.Windows.Shapes.Rectangle { Width=9, Height=1.2, Margin=new Thickness(7,top,0,0), HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Top };
-  g.Children.Add(num("1",-0.5)); g.Children.Add(num("2",7.5));
-  foreach(var r in new[] { line(4.6), line(12.6) }) { r.SetBinding(System.Windows.Shapes.Shape.FillProperty,new Binding("Foreground") { RelativeSource=new RelativeSource(RelativeSourceMode.FindAncestor,typeof(Button),1) }); g.Children.Add(r); }
-  return g;
  }
  static D.Icon LoadAppIcon() {
   try { var st=typeof(MainWindow).Assembly.GetManifestResourceStream("BotNotes.ico"); if(st!=null) using(st) return new D.Icon(st,Forms.SystemInformation.SmallIconSize); } catch {}
@@ -409,9 +400,10 @@ partial class MainWindow : Window {
  }
  void SetStatus(string text,Brush tone) { if(saveStatus==null) return; saveStatus.Text=text; saveStatus.Foreground=tone==Palette.Warn?Palette.Warn:Palette.Muted; statusDot.Fill=tone; }
  void ShowSleepState() {
-  sleepButton.Content=Ui.IconLabel(G_Sun,awake?"唤醒中":"保持唤醒");
+  // 咖啡杯：关着是空杯，开着冒热气并用强调色。
+  sleepButton.Content=LineIcon.Make(awake?LineIcon.CupSteam:LineIcon.Cup,null,18);
   sleepButton.Background=awake?Palette.AccentBg:Brushes.Transparent; sleepButton.Foreground=awake?Palette.Accent:Palette.Muted;
-  sleepButton.ToolTip=awake?"正在阻止系统自动睡眠；点击恢复":"阻止系统自动睡眠";
+  sleepButton.ToolTip=awake?"保持唤醒中：正在阻止系统自动睡眠；点击恢复":"保持唤醒：阻止系统自动睡眠";
  }
  static void Choose(Button b,bool on) { b.Background=on?Palette.Raised:Brushes.Transparent; b.Foreground=on?Palette.Text:Palette.Muted; }
 }

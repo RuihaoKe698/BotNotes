@@ -16,6 +16,16 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!-- 文件属性里显示的版本和版权；发新版时只改 Version -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Product>BotNotes</Product>
+    <AssemblyTitle>BotNotes</AssemblyTitle>
+    <Company>RuihaoKe</Company>
+    <Copyright>Copyright © 2026 RuihaoKe</Copyright>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="BotNotes.ico" LogicalName="BotNotes.ico" />
     <Reference Include="System.Xaml" />

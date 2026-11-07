@@ -371,6 +371,8 @@ partial class MainWindow {
   shadowFar.BeginAnimation(OpacityProperty,null); shadowNear.BeginAnimation(OpacityProperty,null); shadowFar.Opacity=shadowNear.Opacity=1;
  }
  void ToggleSleep() { if(!awake) {if(SetThreadExecutionState(ES_CONTINUOUS|ES_SYSTEM_REQUIRED)==0) {Msg("无法阻止系统睡眠。"); return;} awake=true;} else {SetThreadExecutionState(ES_CONTINUOUS); awake=false;} ShowSleepState(); }
+ // 出错退出前收起通知区域图标，免得留下一个点了没反应的图标。
+ internal void HideTray() { if(tray!=null) { tray.Visible=false; tray.Dispose(); } }
  void Quit() {timer.Stop(); if(!SaveNote()) {Expand(false); if(!Ask("当前内容没能保存。如果需要，请先把要保留的文字复制出来。","放弃未保存的更改并退出？","放弃并退出",true)) return;} SetThreadExecutionState(ES_CONTINUOUS); tray.Visible=false; tray.Dispose(); quitting=true; Close(); Application.Current.Shutdown();}
 }
 }

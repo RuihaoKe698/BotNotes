@@ -13,7 +13,7 @@ WPF note app for Windows, C# with no XAML. Formerly NotchNotes for Windows, then
 
 ## Rules
 
-- Do not change user-visible text, data file names (`note.md`, `settings.ini`, `order.txt`, `shelf.txt`, the `archive` folder), the data folder name (`%LOCALAPPDATA%\BotNotes`), mutex names, or registry value names.
+- Do not change user-visible text, data file names (`note.md`, `settings.ini`, `order.txt`, `shelf.txt`, the `archive` folder, `logs\crash.log`), the data folder name (`%LOCALAPPDATA%\BotNotes`), mutex names, or registry value names.
 - Never write to the real data folder `%LOCALAPPDATA%\BotNotes` or the old ones (`DotNotes`, `NotchNotesWindows`) in tests. Point `MainWindow.LocalRoot` at a temp directory.
 - Never touch the real autostart keys (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and `...\Explorer\StartupApproved\Run`) in tests. Use a throwaway key under `HKCU\Software\BotNotesTests\<guid>` and delete it afterwards.
 - Do not start BotNotes on the user's desktop, do not send synthetic mouse or keyboard input, and do not kill a running BotNotes. Test in-process.
