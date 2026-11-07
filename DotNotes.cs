@@ -2579,7 +2579,7 @@ class MainWindow : Window {
  void ScheduleBotTimer() { if(!mainBotOn && !previewBotOn) return; double now=(DateTime.UtcNow-botEpoch).TotalSeconds, target=Math.Min(nextWrite,Math.Min(nextBlink,Math.Min(nextLook,nextReturn))); botTimer.Interval=TimeSpan.FromSeconds(Math.Max(0.01,target-now)); botTimer.Start(); }
  void BotTick(double now) {
   while(Math.Min(nextWrite,Math.Min(nextBlink,Math.Min(nextLook,nextReturn)))<=now) {
-   if(nextWrite<=nextBlink && nextWrite<=nextLook && nextWrite<=nextReturn) { double when=nextWrite; nextWrite=when+45+botRandom.NextDouble()*45; if(mainBotOn) StartWriting(); if(previewBotOn && dotPreview.Diameter>=20) StartPreviewWriting(); }
+   if(nextWrite<=nextBlink && nextWrite<=nextLook && nextWrite<=nextReturn) { double when=nextWrite; nextWrite=when+45+botRandom.NextDouble()*45; if(mainBotOn) StartWriting(); if(previewBotOn) StartPreviewWriting(); }
    else if(nextBlink<=nextLook && nextBlink<=nextReturn) { double when=nextBlink; bool twice=botRandom.NextDouble()<0.2; if(mainBotOn && !writing) BlinkBot(bot,twice,botHovering); if(previewBotOn) BlinkBot(dotPreview,twice,false); nextBlink=when+1+botRandom.NextDouble()*4; }
    else if(nextLook<=nextReturn && mainBotOn && (gazeTracking || writing || DateTime.UtcNow<gazeResume) && !previewBotOn) { nextLook+=1; nextReturn=double.PositiveInfinity; }
    else if(nextLook<=nextReturn) { double when=nextLook; idleX=(botRandom.NextDouble()*2-1)*0.08; idleY=(botRandom.NextDouble()*2-1)*0.08; ConstrainGaze(ref idleX,ref idleY); if(mainBotOn && !botHovering && !gazeTracking && !writing) LookBot(bot,idleX,idleY,250); if(previewBotOn) LookBot(dotPreview,idleX,idleY,250); nextReturn=botRandom.NextDouble()<0.5?when+0.6+botRandom.NextDouble()*0.9:double.PositiveInfinity; nextLook=when+2+botRandom.NextDouble()*2; }
@@ -2612,7 +2612,6 @@ class MainWindow : Window {
  void DelayWrite() { if(writeDelay==null) { writeDelay=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(400) }; writeDelay.Tick+=(sender,args)=> { writeDelay.Stop(); StartWriting(); }; } writeDelay.Stop(); writeDelay.Start(); }
  bool StartWriting() {
   if(expanded || dragArmed || springOn || botHovering || dotHit.IsMouseOver || !mainBotOn || !SystemParameters.ClientAreaAnimation || writing) return false;
-  if(dotSize<20) { BlinkBot(bot,false,false); return false; }
   writing=true; gazeTracking=false; StopGazeFrames(); if(gazeTimer!=null) { gazeTimer.Interval=TimeSpan.FromMilliseconds(100); gazeTimer.Start(); } double x=-0.08,y=0.08; ConstrainGaze(ref x,ref y); LookBot(bot,x,y,220);
   bot.StartWrite(()=> { writing=false; gazeResume=DateTime.UtcNow.AddMilliseconds(300); });
   ArmWriteLift(); return true;
