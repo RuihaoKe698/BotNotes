@@ -2,7 +2,7 @@
 
 保留屏幕顶部入口、深色悬浮面板和本地笔记的基本使用方式。展开后最先看到的是正在写的笔记和它的标签，其他控件往后退。
 
-- 改名（用户要求）：2026-11-05 NotchNotes for Windows 改叫 DotNotes；2026-11-07 收起态换成小机器人后再改叫 BotNotes。程序（BotNotes.exe）、源码（BotNotes.cs）、图标、刘海标签、托盘、单实例互斥量（Local\BotNotesSingleInstance）、启动项值名都用新名字；代码命名空间 NotchNotesWindows 不变。
+- 改名（用户要求）：2026-11-05 NotchNotes for Windows 改叫 DotNotes；2026-11-07 收起态换成小机器人后再改叫 BotNotes。程序（BotNotes.exe）、源码（`src/BotNotes` 下按功能拆分的多个 .cs 文件）、图标、刘海标签、托盘、单实例互斥量（Local\BotNotesSingleInstance）、启动项值名都用新名字；代码命名空间 NotchNotesWindows 不变。
 - 数据搬家：数据文件夹为 `%LOCALAPPDATA%\BotNotes`，旧名字从新到旧依次是 `DotNotes`、`NotchNotesWindows`。Main 里先检查旧版是否在运行（依次打开 DotNotes 和 NotchNotes 的单实例互斥量），在运行就提示“先退出旧版”并退出，避免两个程序同时写同一份笔记；否则把最近的那个非空旧文件夹整个 Directory.Move 过去（新文件夹存在但是空的也照搬），只搬一个。搬不成时继续用旧文件夹，不丢数据。归档位置如果记的是旧文件夹下的路径，读设置时改到新文件夹。启动项：旧 Run 值 DotNotes、NotchNotes 都删除；其中有一条原来是开着的就写 BotNotes，全部在任务管理器里被禁用过的不写新值，保持关闭。
 
 ## 颜色角色（用户已确认整理方向，2026-11-03）

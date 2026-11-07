@@ -4,9 +4,10 @@ WPF note app for Windows, C# with no XAML. Formerly NotchNotes for Windows, then
 
 ## Build and test
 
-- Build: `build.cmd`, or `dotnet build -c Release` (SDK-style project, target `net48`, WPF + WinForms).
-- Test: `dotnet test`.
-- Output is `BotNotes.exe` in the project folder. `BotNotes.ico` is both the win32 icon and an embedded manifest resource named exactly `BotNotes.ico` (the code calls `GetManifestResourceStream("BotNotes.ico")`).
+- Solution: `BotNotes.sln`; app project `src/BotNotes/BotNotes.csproj` (SDK-style, target `net48`, WPF + WinForms), tests `tests/BotNotes.Tests/BotNotes.Tests.csproj`.
+- Build: `build.cmd`, or `dotnet build BotNotes.sln -c Release`. `build.cmd` runs `dotnet build src\BotNotes\BotNotes.csproj -c Release`, then copies `src\BotNotes\bin\Release\net48\BotNotes.exe` to the repo root as `BotNotes.exe`; it does not copy when the build fails.
+- Test: `dotnet test BotNotes.sln -c Release`.
+- Output is `BotNotes.exe` in the app project folder (`src/BotNotes/bin/Release/net48/BotNotes.exe`). `BotNotes.ico` is both the win32 icon and an embedded manifest resource named exactly `BotNotes.ico` (the code calls `GetManifestResourceStream("BotNotes.ico")`).
 - The app must run on the .NET Framework 4.8 built into Windows. Never require a new runtime for users. Reference assemblies come from `Microsoft.NETFramework.ReferenceAssemblies`.
 - Source files keep their UTF-8 BOM.
 
