@@ -94,13 +94,13 @@ static class Palette {
  public static Brush Make(string c) { var b=(Brush)new BrushConverter().ConvertFromString(c); b.Freeze(); return b; }
 }
 
-// 球体、眼睛和外圈分层：呼吸缩放球体时眼睛仍保持原来的形状。
+// 球体和眼睛分层（不画暗色外环，只留一层淡淡的同色辉光，显得更轻）：呼吸缩放球体时眼睛仍保持原来的形状。
 class BotVisual : Canvas {
  public readonly System.Windows.Shapes.Ellipse glow, ball;
  public readonly System.Windows.Shapes.Rectangle leftEye, rightEye;
  public readonly ScaleTransform ballScale=new ScaleTransform(1,1), leftScale=new ScaleTransform(1,1), rightScale=new ScaleTransform(1,1);
  public readonly TranslateTransform floating=new TranslateTransform(), gaze=new TranslateTransform();
- readonly Canvas eyes=new Canvas(); readonly System.Windows.Shapes.Ellipse ring;
+ readonly Canvas eyes=new Canvas();
  public readonly System.Windows.Shapes.Path leftDrag=new System.Windows.Shapes.Path(), rightDrag=new System.Windows.Shapes.Path(); public readonly ScaleTransform leftDragScale=new ScaleTransform(1,1), rightDragScale=new ScaleTransform(1,1); int faceGeneration;
  public double Diameter { get; private set; }
  public Canvas writeRearLeft, writeRearRight, writeFrontLeft, writeFrontRight; public readonly List<AnimationClock> writeClocks=new List<AnimationClock>(); readonly List<Animatable> writeTargets=new List<Animatable>(); readonly List<DependencyProperty> writeProperties=new List<DependencyProperty>(); System.Windows.Shapes.Ellipse writeHandLeft,writeHandRight,writeFrontHandLeft,writeFrontHandRight; bool writeSeeking;
@@ -108,7 +108,6 @@ class BotVisual : Canvas {
   IsHitTestVisible=false; ClipToBounds=false; RenderTransform=floating;
   // 这些图层只改变缩放或透明度，缓存可避免待机时每帧重算径向渐变。
   glow=new System.Windows.Shapes.Ellipse { CacheMode=new BitmapCache() }; Children.Add(glow);
-  ring=new System.Windows.Shapes.Ellipse { CacheMode=new BitmapCache() }; Children.Add(ring);
   ball=new System.Windows.Shapes.Ellipse { CacheMode=new BitmapCache(), RenderTransformOrigin=new Point(0.5,0.5), RenderTransform=ballScale }; Children.Add(ball);
   eyes.RenderTransform=gaze; Children.Add(eyes);
   leftEye=Eye(leftScale); rightEye=Eye(rightScale); eyes.Children.Add(leftEye); eyes.Children.Add(rightEye);
@@ -118,7 +117,7 @@ class BotVisual : Canvas {
  static System.Windows.Shapes.Rectangle Eye(ScaleTransform transform) { return new System.Windows.Shapes.Rectangle { Fill=Brushes.White, RenderTransformOrigin=new Point(0.5,0.5), RenderTransform=transform }; }
  public void Resize(double d) {
   Diameter=d; Width=Height=d; eyes.Width=eyes.Height=d;
-  SizeAt(glow,d*1.6,-d*0.3); SizeAt(ring,d*1.14,-d*0.07);
+  SizeAt(glow,d*1.6,-d*0.3);
   SizeAt(ball,d,0);
   double w=Math.Max(2,d*0.10), h=Math.Max(4,d*0.21); leftEye.Width=rightEye.Width=w; leftEye.Height=rightEye.Height=h; leftEye.RadiusX=rightEye.RadiusX=w/2; leftEye.RadiusY=rightEye.RadiusY=w/2;
   double x1=d*(0.5-0.21)-w/2, x2=d*(0.5+0.08)-w/2, y=d*(0.5-0.245)-h/2;
@@ -132,8 +131,8 @@ class BotVisual : Canvas {
  public void SetDragFace(bool active,bool animate,Action finished) {
   int generation=++faceGeneration; if(!animate) { leftEye.Visibility=rightEye.Visibility=active?Visibility.Collapsed:Visibility.Visible; leftDrag.Visibility=rightDrag.Visibility=active?Visibility.Visible:Visibility.Collapsed; if(finished!=null) finished(); return; }
   var from=active?new[]{leftScale,rightScale}:new[]{leftDragScale,rightDragScale};
-  var close=new DoubleAnimation(from[0].ScaleY,0.15,TimeSpan.FromMilliseconds(70)) { FillBehavior=FillBehavior.Stop }; Timeline.SetDesiredFrameRate(close,30);
-  close.Completed+=(sender,args)=> { if(generation!=faceGeneration) return; leftEye.Visibility=rightEye.Visibility=active?Visibility.Collapsed:Visibility.Visible; leftDrag.Visibility=rightDrag.Visibility=active?Visibility.Visible:Visibility.Collapsed; from[0].BeginAnimation(ScaleTransform.ScaleYProperty,null); from[1].BeginAnimation(ScaleTransform.ScaleYProperty,null); from[0].ScaleY=from[1].ScaleY=1; var target=active?new[]{leftDragScale,rightDragScale}:new[]{leftScale,rightScale}; var open=new DoubleAnimation(0.6,1,TimeSpan.FromMilliseconds(90)) { EasingFunction=new BackEase { Amplitude=0.4, EasingMode=EasingMode.EaseOut }, FillBehavior=FillBehavior.Stop }; Timeline.SetDesiredFrameRate(open,30); open.Completed+=(s,e)=> { if(generation==faceGeneration && finished!=null) finished(); }; target[0].BeginAnimation(ScaleTransform.ScaleYProperty,open); target[1].BeginAnimation(ScaleTransform.ScaleYProperty,open); };
+  var close=new DoubleAnimation(from[0].ScaleY,0.15,TimeSpan.FromMilliseconds(70)) { FillBehavior=FillBehavior.Stop }; Timeline.SetDesiredFrameRate(close,60);
+  close.Completed+=(sender,args)=> { if(generation!=faceGeneration) return; leftEye.Visibility=rightEye.Visibility=active?Visibility.Collapsed:Visibility.Visible; leftDrag.Visibility=rightDrag.Visibility=active?Visibility.Visible:Visibility.Collapsed; from[0].BeginAnimation(ScaleTransform.ScaleYProperty,null); from[1].BeginAnimation(ScaleTransform.ScaleYProperty,null); from[0].ScaleY=from[1].ScaleY=1; var target=active?new[]{leftDragScale,rightDragScale}:new[]{leftScale,rightScale}; var open=new DoubleAnimation(0.6,1,TimeSpan.FromMilliseconds(90)) { EasingFunction=new BackEase { Amplitude=0.4, EasingMode=EasingMode.EaseOut }, FillBehavior=FillBehavior.Stop }; Timeline.SetDesiredFrameRate(open,60); open.Completed+=(s,e)=> { if(generation==faceGeneration && finished!=null) finished(); }; target[0].BeginAnimation(ScaleTransform.ScaleYProperty,open); target[1].BeginAnimation(ScaleTransform.ScaleYProperty,open); };
   from[0].BeginAnimation(ScaleTransform.ScaleYProperty,close); from[1].BeginAnimation(ScaleTransform.ScaleYProperty,close);
  }
  static void SizeAt(FrameworkElement e,double size,double offset) { e.Width=e.Height=size; SetLeft(e,offset); SetTop(e,offset); }
@@ -144,7 +143,6 @@ class BotVisual : Canvas {
   string[] colors={"#208BFF","#288EFF","#3794FF","#4C9EFF","#65A9FF","#83B6FA"}; for(int i=0;i<colors.Length;i++) g.GradientStops.Add(new GradientStop(Tint(h,colors[i]),i/5.0));
   var shade=new LinearGradientBrush { StartPoint=new Point(0.5,0), EndPoint=new Point(0.5,1) }; shade.GradientStops.Add(new GradientStop(Colors.Transparent,0.4)); shade.GradientStops.Add(new GradientStop(Color.FromArgb(35,255,255,255),1));
   var drawing=new DrawingGroup(); var rect=new RectangleGeometry(new Rect(0,0,1,1)); drawing.Children.Add(new GeometryDrawing(g,null,rect)); drawing.Children.Add(new GeometryDrawing(shade,null,rect)); ball.Fill=new DrawingBrush(drawing);
-  var rim=new RadialGradientBrush { Center=new Point(0.5,0.5), GradientOrigin=new Point(0.5,0.5), RadiusX=0.5, RadiusY=0.5 }; rim.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#5C606E"),0.87)); rim.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#4A4644"),0.93)); rim.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#2F2423"),0.98)); rim.GradientStops.Add(new GradientStop(Color.FromArgb(0,47,36,35),1)); ring.Fill=rim; ring.Opacity=light?0.6:1;
   if(writeHandLeft!=null) { writeHandLeft.Fill=ball.Fill; writeHandRight.Fill=ball.Fill; writeFrontHandLeft.Fill=ball.Fill; writeFrontHandRight.Fill=ball.Fill; }
   Color c=Tint(h,"#208BFF"); var halo=new RadialGradientBrush { Center=new Point(0.5,0.5), GradientOrigin=new Point(0.5,0.5), RadiusX=0.5, RadiusY=0.5 }; halo.GradientStops.Add(new GradientStop(Color.FromArgb(150,c.R,c.G,c.B),0)); halo.GradientStops.Add(new GradientStop(Color.FromArgb(90,c.R,c.G,c.B),0.58)); halo.GradientStops.Add(new GradientStop(Color.FromArgb(0,c.R,c.G,c.B),1)); glow.Fill=halo; glow.Opacity=0.45;
  }
@@ -173,7 +171,7 @@ class BotVisual : Canvas {
  Canvas WriteCanvas() { return new Canvas { Width=Diameter, Height=Diameter, ClipToBounds=false, IsHitTestVisible=false }; }
  System.Windows.Shapes.Ellipse Hand(double d,double x,double y) { var hand=new System.Windows.Shapes.Ellipse { Width=d*0.26, Height=d*0.26, Fill=ball.Fill, CacheMode=new BitmapCache(), Stroke=Palette.Make("#4A4644"), StrokeThickness=Math.Max(0.5,d*0.02) }; SetLeft(hand,d*x-d*0.13); SetTop(hand,d*y-d*0.13); return hand; }
  Brush WriteSpine() { var brush=ball.Fill as DrawingBrush; var drawings=brush==null?null:brush.Drawing as DrawingGroup; var geom=drawings==null?null:drawings.Children[0] as GeometryDrawing; var gradient=geom==null?null:geom.Brush as RadialGradientBrush; Color c=gradient==null?Colors.SteelBlue:gradient.GradientStops[0].Color; return new SolidColorBrush(Palette.Mix(c,Colors.Black,0.5)); }
- void AddWriteAnimation(DependencyObject target,DependencyProperty property,DoubleAnimationUsingKeyFrames animation) { Timeline.SetDesiredFrameRate(animation,30); var clock=(AnimationClock)animation.CreateClock(true); var animatable=(Animatable)target; animatable.ApplyAnimationClock(property,clock); writeClocks.Add(clock); writeTargets.Add(animatable); writeProperties.Add(property); }
+ void AddWriteAnimation(DependencyObject target,DependencyProperty property,DoubleAnimationUsingKeyFrames animation) { Timeline.SetDesiredFrameRate(animation,60); var clock=(AnimationClock)animation.CreateClock(true); var animatable=(Animatable)target; animatable.ApplyAnimationClock(property,clock); writeClocks.Add(clock); writeTargets.Add(animatable); writeProperties.Add(property); }
  public void SeekWrite(double seconds) { writeSeeking=true; foreach(var clock in writeClocks.ToArray()) { clock.Controller.Pause(); clock.Controller.SeekAlignedToLastTick(TimeSpan.FromSeconds(seconds),TimeSeekOrigin.BeginTime); } }
  public void StopWrite() { writeSeeking=false; for(int i=0;i<writeClocks.Count;i++) { writeTargets[i].ApplyAnimationClock(writeProperties[i],null); writeClocks[i].Controller.Stop(); } writeClocks.Clear(); writeTargets.Clear(); writeProperties.Clear(); foreach(var layer in new[]{writeRearLeft,writeRearRight,writeFrontLeft,writeFrontRight}) if(layer!=null) Children.Remove(layer); writeRearLeft=writeRearRight=writeFrontLeft=writeFrontRight=null; writeHandLeft=writeHandRight=writeFrontHandLeft=writeFrontHandRight=null; }
  public void Reset() { floating.BeginAnimation(TranslateTransform.YProperty,null); floating.Y=0; ballScale.BeginAnimation(ScaleTransform.ScaleXProperty,null); ballScale.BeginAnimation(ScaleTransform.ScaleYProperty,null); ballScale.ScaleX=ballScale.ScaleY=1; glow.BeginAnimation(UIElement.OpacityProperty,null); glow.Opacity=0.45; gaze.BeginAnimation(TranslateTransform.XProperty,null); gaze.BeginAnimation(TranslateTransform.YProperty,null); gaze.X=gaze.Y=0; leftScale.BeginAnimation(ScaleTransform.ScaleYProperty,null); rightScale.BeginAnimation(ScaleTransform.ScaleYProperty,null); leftScale.ScaleY=rightScale.ScaleY=1; }
@@ -342,7 +340,7 @@ class MainWindow : Window {
  static readonly string[][] BgPresets={ new[]{"#0F1013","曜石黑"}, new[]{"#1C1D21","石墨灰"}, new[]{"#0E1522","午夜蓝"}, new[]{"#0E1A15","墨绿"}, new[]{"#1A1411","暖咖"}, new[]{"#F4F3EF","纸白（浅色）"} };
  Color accent=Palette.DefaultAccent; readonly List<KeyValuePair<Color,System.Windows.Shapes.Ellipse>> swatchRings=new List<KeyValuePair<Color,System.Windows.Shapes.Ellipse>>(); Button customColorBtn;
  static readonly string[][] Presets={ new[]{"#A6DDB4","薄荷绿"}, new[]{"#9CC7F5","天蓝"}, new[]{"#C3B4F0","薰衣草"}, new[]{"#F2C28C","杏橙"}, new[]{"#F2A9C4","樱粉"}, new[]{"#8ED8D2","青碧"} };
- Button autoOnBtn, autoOffBtn; Button[] breatheBtns=new Button[4]; int breatheRate=2, dotSize=22; Slider dotSizeSlider; TextBlock dotSizeText; BotVisual dotPreview;
+ Button autoOnBtn, autoOffBtn; int dotSize=22; Slider dotSizeSlider; TextBlock dotSizeText; BotVisual dotPreview;
  // 全屏：面板铺满主显示器，方便演示；退出时回到原来的位置和大小。
  bool fullscreen=false; double[] beforeFull; Button fsButton;
  // 脑图：把标题和列表画成从左往右展开的树。
@@ -396,7 +394,7 @@ class MainWindow : Window {
   // 收起后只留一个小机器人；周围一块看不见的感应区负责悬停、点击、拖动和拖入（Alpha=1，肉眼不可见但能接住鼠标）。
   dotLayer=new Grid { HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Top };
   dotHit=new Border { Width=72, Height=16, Background=new SolidColorBrush(Color.FromArgb(1,0,0,0)), Cursor=Cursors.Hand, ToolTip="DotNotes：点击或停留展开；按住拖动可移动" }; ToolTipService.SetInitialShowDelay(dotHit,1200);
-  // 外圈、球体和眼睛一起随弹簧变形，变形原点始终在球心。
+  // 辉光、球体和眼睛一起随弹簧变形，变形原点始终在球心。
   dotBody=new Grid { Width=dotSize, Height=dotSize, HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Top, Margin=new Thickness(0,4,0,0), IsHitTestVisible=false, RenderTransformOrigin=new Point(0.5,0.5), RenderTransform=dotWarp=new MatrixTransform() };
   bot=new BotVisual(dotSize,accent,Palette.Light); dotBody.Children.Add(bot);
   dotLayer.Children.Add(dotHit); dotLayer.Children.Add(dotBody); outerGrid.Children.Add(dotLayer);
@@ -675,17 +673,19 @@ class MainWindow : Window {
    if(!dragArmed || e.LeftButton!=MouseButtonState.Pressed) return;
    var p=CursorDip(); double dx=p.X-dragFrom.X, dy=p.Y-dragFrom.Y;
    if(!dragMoved && Math.Abs(dx)<4 && Math.Abs(dy)<4) return;
-   dragMoved=true; transient=false;
+   MarkDragMoved();
    if(dragDot && springOn) springGoal=DotTarget(new Point(dragOrigin.X+dx,dragOrigin.Y+dy)); // 只更新目标，圆点由弹簧带过去
    else if(dragDot) MoveDotTo(new Point(dragOrigin.X+dx,dragOrigin.Y+dy)); else MovePanelTo(new Point(dragOrigin.X+dx,dragOrigin.Y+dy));
   };
   handle.PreviewMouseLeftButtonUp+=(s,e)=> {
    if(!dragArmed) return; dragArmed=false;
-   if(dragMoved) { e.Handled=true; handle.ReleaseMouseCapture(); if(!springOn) { SaveSettings(); if(dragDot && !expanded) Breathe(true); } return; } // 按钮失去捕获后不会再触发点击；弹簧停稳后再存位置
+   if(dragMoved) { e.Handled=true; if(dragDot && !expanded) EndDragFace(); handle.ReleaseMouseCapture(); if(!springOn) { SaveSettings(); if(dragDot && !expanded) Breathe(true); } return; } // 按钮失去捕获后不会再触发点击；弹簧停稳后再存位置
    if(!preview) { handle.ReleaseMouseCapture(); e.Handled=true; if(click!=null) click(); }
   };
   handle.LostMouseCapture+=(s,e)=> { if(dragArmed && dragMoved) { dragArmed=false; if(dragDot && !expanded) EndDragFace(); if(!springOn) SaveSettings(); } else if(dragArmed && dragDot) dragArmed=false; };
  }
+ // 真正开始拖动的那一刻（移动超过 4px）：鼠标消息和每帧弹簧谁先发现都走这里，拖小机器人时换成 >< 表情。
+ void MarkDragMoved() { if(dragMoved) return; dragMoved=true; transient=false; if(dragDot && !expanded) BeginDragFace(); }
  Point CursorDip() {
   POINT p; GetCursorPos(out p); var src=PresentationSource.FromVisual(this);
   return src==null?new Point(p.X,p.Y):src.CompositionTarget.TransformFromDevice.Transform(new Point(p.X,p.Y));
@@ -713,7 +713,7 @@ class MainWindow : Window {
  }
  // ——— 圆点的弹簧跟随 ———
  // 拖动时圆点不直接跳到鼠标处，而是挂在一根弹簧上被拉过去：快拖会落后一点，松手或停下时冲过头一点再弹回，像有重量。
- // 弹簧刚度 1800、阻尼 64（阻尼比约 0.75，过冲约 3%）：紧跟鼠标，正常速度拖动只落后几像素、快甩约 30px，不会拖泥带水；每帧按 4ms 的小步积分，帧率不稳也不会抖。
+ // 弹簧刚度 420、阻尼 28（阻尼比约 0.68，过冲约 5%）：拖动时明显落在鼠标后面（每秒 1000px 的速度约落后 65px），停手后追上来、轻轻冲过头再弹回，惯性感更强；每帧按 4ms 的小步积分，帧率不稳也不会抖。
  // 速度越快圆点沿运动方向拉得越长（最多 1.25 倍，垂直方向相应变扁，面积不变）；按住时放大到 1.18 倍，像被“拿起来”。
  // 系统关闭了界面动画时不用弹簧，照旧直接跟手。
  bool springOn; Point springPos, springGoal; Vector springVel; double pickScale=1; TimeSpan springLast;
@@ -726,14 +726,14 @@ class MainWindow : Window {
   var r=e as RenderingEventArgs; if(r==null) return;
   double dt=springLast==TimeSpan.Zero?1/60.0:(r.RenderingTime-springLast).TotalSeconds; if(r.RenderingTime==springLast) return; springLast=r.RenderingTime;
   dt=Math.Max(0.001,Math.Min(dt,0.05));
-  const double k=1800, c=64; int n=(int)Math.Ceiling(dt/0.004); double h=dt/n;
+  const double k=420, c=28; int n=(int)Math.Ceiling(dt/0.004); double h=dt/n;
   for(int i=0;i<n;i++) { var acc=k*(springGoal-springPos)-c*springVel; springVel+=acc*h; springPos+=springVel*h; }
   bool held=dragArmed && dragDot;
   // 目标每帧直接读光标位置：每帧回调的优先级高于鼠标输入，鼠标移动消息会被攒着、每 80–100ms 才处理一批，
   // 只靠它更新目标的话圆点是一顿一顿往前跳的（这就是拖动卡顿的原因）。
   if(held) {
    var cp=CursorDip(); double dx=cp.X-dragFrom.X, dy=cp.Y-dragFrom.Y;
-   if(!dragMoved && (Math.Abs(dx)>=4 || Math.Abs(dy)>=4)) { if(dragDot && !expanded) BeginDragFace(); dragMoved=true; transient=false; }
+   if(!dragMoved && (Math.Abs(dx)>=4 || Math.Abs(dy)>=4)) MarkDragMoved();
    if(dragMoved) springGoal=DotTarget(new Point(dragOrigin.X+dx,dragOrigin.Y+dy));
   }
   pickScale+=((held?1.18:1)-pickScale)*Math.Min(1,dt*16);
@@ -1368,7 +1368,7 @@ class MainWindow : Window {
  // ——— 设置 ———
  void LoadSettings() {
   try {
-   string f=Path.Combine(dir,"settings.ini"); if(!File.Exists(f)) return; bool hasRate=false; int legacyRate=2;
+   string f=Path.Combine(dir,"settings.ini"); if(!File.Exists(f)) return;
    foreach(var raw in File.ReadAllLines(f)) {
     int i=raw.IndexOf('='); if(i<=0) continue; string k=raw.Substring(0,i).Trim(), v=raw.Substring(i+1).Trim(); int n; double d;
     bool num=double.TryParse(v,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out d) && !double.IsInfinity(d);
@@ -1381,14 +1381,11 @@ class MainWindow : Window {
     else if(k=="panelH" && num) prefH=Math.Max(MinH,d);
     else if(k=="hoverEnabled") hoverOn=v!="0";
     else if(k=="pinned") pinned=v=="1";
-    else if(k=="breathe") legacyRate=v=="0"?0:2;
-    else if(k=="breatheRate") { hasRate=true; breatheRate=int.TryParse(v,out n) && n>=0 && n<=3?n:2; }
     else if(k=="botSize") dotSize=int.TryParse(v,out n) && n>=16 && n<=40?n:22;
     else if(k=="accent") { try { accent=(Color)ColorConverter.ConvertFromString(v); } catch {} }
     else if(k=="background") { try { background=(Color)ColorConverter.ConvertFromString(v); } catch {} }
     else if(k=="archiveDir" && v.Length>0) archiveDir=v;
    }
-   if(!hasRate) breatheRate=legacyRate;
    string oldRoot=AppData("NotchNotesWindows"); // 旧数据文件夹搬走后，指向它里面的归档位置跟着改
    if(archiveDir!=null && !Directory.Exists(oldRoot) && archiveDir.StartsWith(oldRoot,StringComparison.OrdinalIgnoreCase)) archiveDir=dir+archiveDir.Substring(oldRoot.Length);
   } catch {}
@@ -1398,7 +1395,7 @@ class MainWindow : Window {
    Func<double,string> pos=v=>double.IsNaN(v)?"":Math.Round(v,1).ToString(System.Globalization.CultureInfo.InvariantCulture);
    double panelLeft=this.panelLeft, panelTop=this.panelTop, dotX=this.dotX, dotY=this.dotY; // 全屏时记的是全屏前的位置
    if(fullscreen && beforeFull!=null) { panelLeft=beforeFull[0]; panelTop=beforeFull[1]; dotX=beforeFull[4]; dotY=beforeFull[5]; }
-   var text=new[] { "hoverEnabled="+(hoverOn?"1":"0"), "hoverDelayMs="+hoverDelay, "archiveDir="+(archiveDir??""), "pinned="+(pinned?"1":"0"), "breatheRate="+breatheRate, "botSize="+dotSize, "accent="+Palette.ToHex(accent), "background="+Palette.ToHex(background),
+   var text=new[] { "hoverEnabled="+(hoverOn?"1":"0"), "hoverDelayMs="+hoverDelay, "archiveDir="+(archiveDir??""), "pinned="+(pinned?"1":"0"), "botSize="+dotSize, "accent="+Palette.ToHex(accent), "background="+Palette.ToHex(background),
     "panelLeft="+pos(panelLeft), "panelTop="+pos(panelTop), "dotX="+pos(dotX), "dotY="+pos(dotY), "panelW="+pos(prefW), "panelH="+pos(prefH) };
    string target=Path.Combine(dir,"settings.ini"), temp=Path.Combine(dir,"settings.tmp");
    File.WriteAllLines(temp,text,System.Text.Encoding.UTF8); if(File.Exists(target)) File.Replace(temp,target,null); else File.Move(temp,target);
@@ -1482,12 +1479,6 @@ class MainWindow : Window {
   }
   customColorBtn=Secondary("自定义…","选择任意颜色"); customColorBtn.Margin=new Thickness(8,0,0,0); customColorBtn.Click+=(s,e)=>PickAccent(); themeRow.Children.Add(customColorBtn);
   theme.Children.Add(themeRow);
-  theme.Children.Add(new TextBlock { Text="小机器人呼吸", Foreground=Palette.Text, FontSize=12.5, Margin=new Thickness(0,14,0,6) });
-  var bSeg=new Border { Background=Palette.Panel, BorderBrush=Palette.Line, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(8), Padding=new Thickness(2), HorizontalAlignment=HorizontalAlignment.Left };
-  var bRow=new StackPanel { Orientation=Orientation.Horizontal }; bSeg.Child=bRow;
-  string[] rateNames={"关闭","低","中","高"}, rateTips={"关闭呼吸，仍会悬浮和眨眼","约每分钟 8.5 次","约每分钟 12 次","约每分钟 20 次"};
-  for(int i=0;i<4;i++) { int rate=i; var button=Ui.Button(rateNames[i],rateTips[i],new CornerRadius(6)); button.Height=26; button.Click+=(sender,args)=> { breatheRate=rate; Breathe(!expanded); PreviewBreathe(); SaveSettings(); UpdateSettingsView(); }; breatheBtns[i]=button; bRow.Children.Add(button); }
-  theme.Children.Add(bSeg);
   var sizeLine=new Grid { Margin=new Thickness(0,14,0,0), HorizontalAlignment=HorizontalAlignment.Left }; sizeLine.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto }); sizeLine.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });
   var sizeLeft=new StackPanel { VerticalAlignment=VerticalAlignment.Center }; sizeLeft.Children.Add(new TextBlock { Text="小机器人大小", Foreground=Palette.Text, FontSize=12.5, Margin=new Thickness(0,0,0,6) });
   var sizeRow=new StackPanel { Orientation=Orientation.Horizontal }; sizeLeft.Children.Add(sizeRow); sizeLine.Children.Add(sizeLeft);
@@ -1570,7 +1561,7 @@ class MainWindow : Window {
   minusBtn.IsEnabled=hoverOn && hoverDelay>0; plusBtn.IsEnabled=hoverOn && hoverDelay<3000;
   string a=ArchiveDir(); archivePathText.Text=a; archivePathText.ToolTip=a; resetArchiveBtn.IsEnabled=!string.IsNullOrEmpty(archiveDir);
   resetPlaceBtn.IsEnabled=!AtHome(); resetSizeBtn.IsEnabled=!DefaultSize();
-  bool autoOn=AutoStartOn(); Choose(autoOnBtn,autoOn); Choose(autoOffBtn,!autoOn); for(int i=0;i<4;i++) Choose(breatheBtns[i],i==breatheRate);
+  bool autoOn=AutoStartOn(); Choose(autoOnBtn,autoOn); Choose(autoOffBtn,!autoOn);
  }
  // ——— 开机自动启动 ———
  // 写在当前用户的启动项（HKCU\...\Run）里，不需要管理员权限。任务管理器“启动应用”里禁用的，记在 StartupApproved 下，这里也认。
@@ -2443,11 +2434,11 @@ class MainWindow : Window {
  void FadeShadows(double from,double to,int ms,int delayMs) {
   foreach(var sh in new[]{shadowFar,shadowNear}) { sh.BeginAnimation(OpacityProperty,null); sh.Opacity=from; var a=Anim(from,to,TimeSpan.FromMilliseconds(ms),null); a.BeginTime=TimeSpan.FromMilliseconds(delayMs); sh.BeginAnimation(OpacityProperty,a); }
  }
- // 缓慢的悬浮和呼吸用 16 帧减少待机开销；眨眼和环顾只在事件到期时唤醒计时器，最高 30 帧。
+ // 缓慢的悬浮和呼吸用 16 帧控制待机开销（幅度只有一两个像素，看不出差别）；眨眼、环顾、表情和写字 60 帧；目光跟随每帧更新，最高 60 帧。
  static double BotFloat(double d) { return Math.Max(1,0.06*d); }
  DispatcherTimer botTimer; readonly Random botRandom=new Random(); DateTime botEpoch; double nextBlink, nextLook, nextWrite, nextReturn=double.PositiveInfinity; bool mainBotOn, previewBotOn, botHovering; double idleX,idleY; bool gazeTracking, gazeFrameOn, writing; TimeSpan gazeFrameAt; DispatcherTimer gazeTimer; DateTime gazeLast, gazeSeen, gazeResume; double gazeX,gazeY; Func<Point> gazeReader=null; string expandedText; DispatcherTimer writeDelay,writeLift;
  DoubleAnimationUsingKeyFrames BreathAnimation(double low,double high) {
-  double seconds=breatheRate==1?7:breatheRate==3?3:5, bottom=Math.Exp(-1), span=Math.Exp(1)-bottom;
+  double seconds=5, bottom=Math.Exp(-1), span=Math.Exp(1)-bottom;
   var a=new DoubleAnimationUsingKeyFrames { Duration=TimeSpan.FromSeconds(seconds), RepeatBehavior=RepeatBehavior.Forever };
   for(int i=0;i<=48;i++) { double t=(double)i/48, value=low+(high-low)*(Math.Exp(Math.Sin(2*Math.PI*t+Math.PI/2))-bottom)/span; a.KeyFrames.Add(new LinearDoubleKeyFrame(value,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(seconds*t)))); }
   Timeline.SetDesiredFrameRate(a,16); return a;
@@ -2459,7 +2450,7 @@ class MainWindow : Window {
  void AnimateBot(BotVisual b,bool on) {
   if(b==null) return; b.Reset(); if(!on || !SystemParameters.ClientAreaAnimation) return;
   b.floating.BeginAnimation(TranslateTransform.YProperty,FloatAnimation(b.Diameter));
-  if(breatheRate>0) { b.ballScale.BeginAnimation(ScaleTransform.ScaleXProperty,BreathAnimation(1,1.035)); b.ballScale.BeginAnimation(ScaleTransform.ScaleYProperty,BreathAnimation(1,1.035)); b.glow.BeginAnimation(UIElement.OpacityProperty,BreathAnimation(0.35,0.6)); }
+  { b.ballScale.BeginAnimation(ScaleTransform.ScaleXProperty,BreathAnimation(1,1.035)); b.ballScale.BeginAnimation(ScaleTransform.ScaleYProperty,BreathAnimation(1,1.035)); b.glow.BeginAnimation(UIElement.OpacityProperty,BreathAnimation(0.35,0.6)); }
  }
  void Breathe(bool on) { if(!on) StopWriting(); mainBotOn=on && !springOn && !dragArmed && !expanded && SystemParameters.ClientAreaAnimation; botHovering=false; AnimateBot(bot,mainBotOn); SyncBotTimer(); SetGazePolling(mainBotOn); }
  void PreviewBreathe() { if((!settingsOpen || !expanded) && dotPreview!=null) dotPreview.StopWrite(); previewBotOn=settingsOpen && expanded && SystemParameters.ClientAreaAnimation; AnimateBot(dotPreview,previewBotOn); SyncBotTimer(); }
@@ -2482,18 +2473,18 @@ class MainWindow : Window {
  static void ConstrainGaze(ref double x,ref double y) { // 默认视线保留对标位置，同时保证眼睛中心和外缘都留在球内。
   double k=1; for(int i=0;i<24;i++) { double lx=-0.21+x*k, rx=0.08+x*k, ey=-0.245+y*k, left=Math.Abs(lx)+0.0625, right=Math.Abs(rx)+0.0625, top=Math.Abs(ey)+0.125; if(lx*lx+ey*ey<=0.42*0.42 && rx*rx+ey*ey<=0.42*0.42 && left*left+top*top<=0.25 && right*right+top*top<=0.25) break; k*=0.8; } x*=k; y*=k;
  }
- static void LookBot(BotVisual b,double x,double y,int ms) { if(b==null) return; var ease=new CubicEase { EasingMode=EasingMode.EaseOut }; double xx=x*b.Diameter, yy=y*b.Diameter; var ax=new DoubleAnimation(b.gaze.X,xx,TimeSpan.FromMilliseconds(ms)) { EasingFunction=ease, FillBehavior=FillBehavior.Stop }; var ay=new DoubleAnimation(b.gaze.Y,yy,TimeSpan.FromMilliseconds(ms)) { EasingFunction=ease, FillBehavior=FillBehavior.Stop }; Timeline.SetDesiredFrameRate(ax,30); Timeline.SetDesiredFrameRate(ay,30); b.gaze.X=xx; b.gaze.Y=yy; b.gaze.BeginAnimation(TranslateTransform.XProperty,ax); b.gaze.BeginAnimation(TranslateTransform.YProperty,ay); }
+ static void LookBot(BotVisual b,double x,double y,int ms) { if(b==null) return; var ease=new CubicEase { EasingMode=EasingMode.EaseOut }; double xx=x*b.Diameter, yy=y*b.Diameter; var ax=new DoubleAnimation(b.gaze.X,xx,TimeSpan.FromMilliseconds(ms)) { EasingFunction=ease, FillBehavior=FillBehavior.Stop }; var ay=new DoubleAnimation(b.gaze.Y,yy,TimeSpan.FromMilliseconds(ms)) { EasingFunction=ease, FillBehavior=FillBehavior.Stop }; Timeline.SetDesiredFrameRate(ax,60); Timeline.SetDesiredFrameRate(ay,60); b.gaze.X=xx; b.gaze.Y=yy; b.gaze.BeginAnimation(TranslateTransform.XProperty,ax); b.gaze.BeginAnimation(TranslateTransform.YProperty,ay); }
  static void BlinkBot(BotVisual b,bool twice,bool hovering) {
   if(b==null) return; double open=hovering?1.12:1; var a=new DoubleAnimationUsingKeyFrames { Duration=TimeSpan.FromMilliseconds(twice?400:140), FillBehavior=FillBehavior.Stop };
   a.KeyFrames.Add(new LinearDoubleKeyFrame(open,KeyTime.FromTimeSpan(TimeSpan.Zero))); a.KeyFrames.Add(new LinearDoubleKeyFrame(0.1,KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(70)))); a.KeyFrames.Add(new LinearDoubleKeyFrame(open,KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(140))));
   if(twice) { a.KeyFrames.Add(new LinearDoubleKeyFrame(open,KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(260)))); a.KeyFrames.Add(new LinearDoubleKeyFrame(0.1,KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(330)))); a.KeyFrames.Add(new LinearDoubleKeyFrame(open,KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(400)))); }
-  Timeline.SetDesiredFrameRate(a,30); b.leftScale.ScaleY=b.rightScale.ScaleY=open; b.leftScale.BeginAnimation(ScaleTransform.ScaleYProperty,a); b.rightScale.BeginAnimation(ScaleTransform.ScaleYProperty,a);
+  Timeline.SetDesiredFrameRate(a,60); b.leftScale.ScaleY=b.rightScale.ScaleY=open; b.leftScale.BeginAnimation(ScaleTransform.ScaleYProperty,a); b.rightScale.BeginAnimation(ScaleTransform.ScaleYProperty,a);
  }
- void BotHover(bool on,double x) { if(!mainBotOn || !SystemParameters.ClientAreaAnimation) return; botHovering=on; if(on && writing) StopWriting(); double scale=on?1.12:1; foreach(var eye in new[]{bot.leftScale,bot.rightScale}) { var a=new DoubleAnimation(eye.ScaleY,scale,TimeSpan.FromMilliseconds(150)) { FillBehavior=FillBehavior.Stop }; Timeline.SetDesiredFrameRate(a,30); eye.ScaleY=scale; eye.BeginAnimation(ScaleTransform.ScaleYProperty,a); } }
+ void BotHover(bool on,double x) { if(!mainBotOn || !SystemParameters.ClientAreaAnimation) return; botHovering=on; if(on && writing) StopWriting(); double scale=on?1.12:1; foreach(var eye in new[]{bot.leftScale,bot.rightScale}) { var a=new DoubleAnimation(eye.ScaleY,scale,TimeSpan.FromMilliseconds(150)) { FillBehavior=FillBehavior.Stop }; Timeline.SetDesiredFrameRate(a,60); eye.ScaleY=scale; eye.BeginAnimation(ScaleTransform.ScaleYProperty,a); } }
  // 鼠标在透明穿透区时也能看见位置；屏幕坐标先通过窗口的 DPI 矩阵换算为 DIP。
  void SetGazePolling(bool on) { if(gazeTimer==null) { gazeTimer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(100) }; gazeTimer.Tick+=(sender,args)=>PollGaze(); } if(on && !expanded) { gazeLast=DateTime.UtcNow; gazeTimer.Interval=TimeSpan.FromMilliseconds(100); gazeTimer.Start(); } else { gazeTimer.Stop(); StopGazeFrames(); gazeTracking=false; gazeX=gazeY=0; } }
  void StopGazeFrames() { if(gazeFrameOn) { CompositionTarget.Rendering-=GazeFrame; gazeFrameOn=false; } }
- void GazeFrame(object sender,EventArgs args) { var frame=args as RenderingEventArgs; if(frame==null) return; if(gazeFrameAt==TimeSpan.Zero) gazeFrameAt=frame.RenderingTime; if(frame.RenderingTime<gazeFrameAt) return; gazeFrameAt+=TimeSpan.FromTicks(333333); if(gazeFrameAt<frame.RenderingTime) gazeFrameAt=frame.RenderingTime+TimeSpan.FromTicks(333333); PollGaze(); }
+ void GazeFrame(object sender,EventArgs args) { var frame=args as RenderingEventArgs; if(frame==null) return; if(gazeFrameAt==TimeSpan.Zero) gazeFrameAt=frame.RenderingTime; if(frame.RenderingTime<gazeFrameAt) return; gazeFrameAt+=TimeSpan.FromTicks(166667); if(gazeFrameAt<frame.RenderingTime) gazeFrameAt=frame.RenderingTime+TimeSpan.FromTicks(166667); PollGaze(); }
  static Point SmoothGaze(Point current,Point target,double seconds) { double weight=1-Math.Exp(-seconds/0.052); return new Point(current.X+(target.X-current.X)*weight,current.Y+(target.Y-current.Y)*weight); }
  static Point GazeTarget(Point cursor,Point center,double d) { double x=cursor.X-center.X,y=cursor.Y-center.Y, dist=Math.Sqrt(x*x+y*y); if(dist<0.3*d) return new Point(); double m=Math.Min(1,(dist-0.3*d)/(1.7*d)); double dx=x/dist*0.11*m, dy=y/dist*0.09*m; ConstrainGaze(ref dx,ref dy); return new Point(dx,dy); }
  void PollGaze() { if(!mainBotOn || expanded || dragArmed || writing || DateTime.UtcNow<gazeResume) return; var now=DateTime.UtcNow; var cursor=gazeReader==null?CursorDip():gazeReader(); var center=new Point(panelLeft+dotX,panelTop+dotY); double dx=cursor.X-center.X,dy=cursor.Y-center.Y; bool near=dx*dx+dy*dy<=Math.Pow(Math.Max(160,6*dotSize),2); double dt=Math.Max(0.001,Math.Min(0.15,(now-gazeLast).TotalSeconds)); gazeLast=now;
