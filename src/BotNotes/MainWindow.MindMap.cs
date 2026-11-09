@@ -220,6 +220,19 @@ partial class MainWindow {
   if(Presenting) ShowPresentation(-1,false);
   if(fit) { mapMoved=false; Dispatcher.BeginInvoke(new Action(FitMap),DispatcherPriority.Loaded); }
  }
+ // 脑图里的操作提示借用左下角已有的提示行，临时显示 3 秒后恢复当前选择对应的提示。
+ void ShowMapHint(string text) {
+  if(mapHint==null) return;
+  mapHint.Text=text;
+  if(mapHintTimer==null) {
+   mapHintTimer=new DispatcherTimer { Interval=TimeSpan.FromSeconds(3) };
+   mapHintTimer.Tick+=(s,e)=> {
+    mapHintTimer.Stop();
+    if(mapHint!=null) mapHint.Text=MapSel()!=null?MapHintSel:MapHintIdle;
+   };
+  }
+  mapHintTimer.Stop(); mapHintTimer.Start();
+ }
  static void Collect(MapNode n,List<MapNode> all) { all.Add(n); foreach(var k in Shown(n)) Collect(k,all); }
  static MapNode FindKey(MapNode n,string key) { if(n.Key==key) return n; foreach(var k in Shown(n)) { var f=FindKey(k,key); if(f!=null) return f; } return null; }
  // 整张图缩放到放得下并居中；小图最多放大到 1.6 倍，免得全屏时字大得夸张。
@@ -291,7 +304,7 @@ partial class MainWindow {
  void Refit() { if(!mapMoved) FitMap(); var m=MapSel(); if(m!=null) ShowMapNode(m); }
  void Unfold(MapNode n) { if(n.Folded) ToggleMapNode(n); }
  void MapAddChild(MapNode n) {
-  if(n==null) return; if(n.Kind==4) { SetStatus("代码块下面不能加节点",Palette.Muted); return; }
+  if(n==null) return; if(n.Kind==4) { ShowMapHint("代码块下面不能加节点"); return; }
   Unfold(n); n=FindLine(mapRoot,KeyOf(n)) ?? n; LoadLines();
   if(n.Depth==0 || n.Kind==1) {
    MapNode head=null, plain=null; foreach(var k in n.Kids) { if(k.Kind==1) head=k; else if(head==null) plain=k; }
@@ -304,7 +317,7 @@ partial class MainWindow {
    var m=MapListRe.Match(lines[n.Line]); string ind=m.Groups[1].Value+new string(' ',m.Groups[2].Length+m.Groups[3].Length);
    MapInsert(MapEnd(n),ind+"- "+(m.Groups[4].Length>0?"[ ] ":"")+NewTopic,false); return;
   }
-  if(pre.Trim().Length>0) { SetStatus("引用下面不能加节点",Palette.Muted); return; }
+  if(pre.Trim().Length>0) { ShowMapHint("引用下面不能加节点"); return; }
   // 普通文字没法带下级：先把它变成列表项，再在下面缩进一项
   lines[n.Line]=pre+"- "+body; MapInsert(n.Line+1,pre+"  - "+NewTopic,false);
  }
@@ -321,7 +334,7 @@ partial class MainWindow {
   MapInsert(at,n.Kind==4?NewTopic:pre+NewTopic,false);
  }
  void MapDelete(MapNode n) {
-  if(n==null) return; if(n.Depth==0) { SetStatus("中心主题不能删除，可以双击改字",Palette.Muted); return; }
+  if(n==null) return; if(n.Depth==0) { ShowMapHint("中心主题不能删除，可以双击改字"); return; }
   LoadLines(); int from=n.Line, to=MapEnd(n); if(n.Kind==1) to=TrimBack(to,from+1);
   var sib=n.Parent.Kids; int i=sib.IndexOf(n); MapNode next=i>0?sib[i-1]:(i+1<sib.Count?sib[i+1]:n.Parent);
   int key=KeyOf(next); if(key>=to) key-=to-from;
@@ -331,7 +344,7 @@ partial class MainWindow {
  }
  void BeginMapEdit(MapNode n) {
   if(n==null || Presenting) return;
-  if(n.Line<0 || n.Kind==4) { SetStatus("这个节点请切到“编辑”里改",Palette.Muted); return; }
+  if(n.Line<0 || n.Kind==4) { ShowMapHint("这个节点请切到“编辑”里改"); return; }
   LoadLines(); string pre, body; SplitLine(lines[n.Line],out pre,out body);
   var box=Ui.Input(body); box.FontSize=Scaled(n.Depth==0?18:n.Depth==1?15:n.Heading?14:13.5); box.FontWeight=n.Heading || n.Depth<=1?FontWeights.SemiBold:FontWeights.Normal;
   box.MinWidth=Math.Max(n.W+8,140); box.MaxWidth=360; box.Padding=new Thickness(6,3,6,4); box.BorderBrush=Palette.Accent;
@@ -399,7 +412,7 @@ partial class MainWindow {
  }
  void CopyMapImage() {
   if(mapRoot==null) return;
-  try { Clipboard.SetImage(MapBitmap()); SetStatus("脑图已复制成图片",Palette.Accent); } catch(Exception ex) { Msg("复制图片失败："+ex.Message); }
+  try { Clipboard.SetImage(MapBitmap()); ShowMapHint("脑图已复制成图片"); } catch(Exception ex) { Msg("复制图片失败："+ex.Message); }
  }
  void ExportMap() {
   if(mapRoot==null) return;
@@ -409,7 +422,7 @@ partial class MainWindow {
     if(d.ShowDialog(new Win32Owner(new System.Windows.Interop.WindowInteropHelper(this).Handle))!=Forms.DialogResult.OK) return;
     var enc=new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(MapBitmap()));
     using(var f=File.Create(d.FileName)) enc.Save(f);
-    SetStatus("已导出脑图图片",Palette.Accent);
+    ShowMapHint("已导出脑图图片");
    }
   } catch(Exception ex) { Msg("导出失败："+ex.Message); }
   finally { modal--; }

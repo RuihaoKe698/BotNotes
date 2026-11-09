@@ -45,7 +45,5 @@ partial class MainWindow {
   w.Loaded+=(s,e)=> { var f=focus??okBtn; f.Focus(); var tb=f as TextBox; if(tb!=null) tb.SelectAll(); };
   w.ShowDialog(); return result;
  }
- static bool HasFiles(DragEventArgs e) { return e.Data.GetDataPresent(DataFormats.FileDrop); }
-
 }
 }

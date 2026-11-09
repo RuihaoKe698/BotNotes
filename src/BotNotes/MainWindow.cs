@@ -35,17 +35,16 @@ partial class MainWindow : Window {
  [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
  [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int cx,int cy,uint flags);
  const uint ES_CONTINUOUS=0x80000000, ES_SYSTEM_REQUIRED=1;
- const string G_Note="\uE70B", G_Close="\uE8BB", G_Add="\uE710", G_Minus="\uE738", G_Sun="\uE706", G_File="\uE8A5", G_Folder="\uE8B7", G_Image="\uEB9F", G_Settings="\uE713", G_Pin="\uE718", G_Open="\uE8E5";
+ const string G_Note="\uE70B", G_Close="\uE8BB", G_Add="\uE710", G_Minus="\uE738", G_Folder="\uE8B7", G_Settings="\uE713", G_Pin="\uE718", G_Open="\uE8E5";
  const int K_Line=0, K_Blank=1, K_Code=2;
- readonly List<string> files=new List<string>();
  readonly List<string> notePaths=new List<string>();
  readonly Dictionary<string,NoteFileState> noteStates=new Dictionary<string,NoteFileState>(StringComparer.OrdinalIgnoreCase);
  readonly HashSet<string> missingNotes=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
- TextBox editor; TextBlock saveStatus; System.Windows.Shapes.Ellipse statusDot; StackPanel shelf, toolbar, tabs; ScrollViewer tabsScroll; string currentNote=DraftKey, currentTitle="", savedText="";
- Button editTab, previewTab, settingsButton; bool previewing=false; Border body, outerBox, shelfBorder; Button notch, sleepButton; Forms.NotifyIcon tray;
- bool expanded=false, awake=false, loading=true, quitting=false, noteReadable=true, shelfReadable=true, draftCreateWarned=false;
- bool transient=false, dragInside=false, draggingOut=false; int modal=0;
- DispatcherTimer timer, hoverTimer, leaveTimer; Point dragStart;
+ TextBox editor; StackPanel toolbar, tabs; ScrollViewer tabsScroll; string currentNote=DraftKey, currentTitle="", savedText="";
+ Button editTab, previewTab, settingsButton; bool previewing=false; Border body, outerBox; Button notch, sleepButton; Forms.NotifyIcon tray;
+ bool expanded=false, awake=false, loading=true, quitting=false, noteReadable=true, draftCreateWarned=false;
+ bool transient=false; int modal=0;
+ DispatcherTimer timer, hoverTimer, leaveTimer;
  // 预览：按行渲染，点哪行就把哪行换成原文输入框。
  ScrollViewer previewScroll; StackPanel previewBlocks; readonly List<string> lines=new List<string>(); readonly List<int[]> blocks=new List<int[]>();
  TextBox lineBox; int editingBlock=-1, editStart=0, editCount=0, editOrigCount=0; bool rendering=false; string eol="\n";
@@ -65,7 +64,7 @@ partial class MainWindow : Window {
  readonly Dictionary<string,HashSet<string>> folds=new Dictionary<string,HashSet<string>>(StringComparer.OrdinalIgnoreCase);
  int[] headLevel=new int[0], foldEnd=new int[0], foldCount=new int[0]; string[] foldKey=new string[0]; bool[] blockHidden=new bool[0];
  RectangleGeometry panelClip; int animGen=0;
- bool pinned=false; Button pinButton; System.Windows.Shapes.Path notchShape; Border shadowNear, shadowFar; Grid outerGrid; System.Windows.Shapes.Rectangle dropZone; TextBlock shelfCount;
+ bool pinned=false; Button pinButton; System.Windows.Shapes.Path notchShape; Border shadowNear, shadowFar; Grid outerGrid;
  int hoverDelay=600; bool hoverOn=true; string saveDir=null; int storageVersion=0; bool settingsOpen=false;
  Border confirmView; TextBlock confirmTitle, confirmBody, confirmHint; DockPanel confirmButtons; Button confirmPrimaryBtn; bool confirmOpen=false; string closeTarget=null;
  Color background=Palette.DefaultBackground; readonly List<KeyValuePair<Color,Border>> bgRings=new List<KeyValuePair<Color,Border>>(); Button customBgBtn;
@@ -74,12 +73,12 @@ partial class MainWindow : Window {
  static readonly string[][] Presets={ new[]{"#A6DDB4","薄荷绿"}, new[]{"#9CC7F5","天蓝"}, new[]{"#C3B4F0","薰衣草"}, new[]{"#F2C28C","杏橙"}, new[]{"#F2A9C4","樱粉"}, new[]{"#8ED8D2","青碧"} };
  Button autoOnBtn, autoOffBtn; int dotSize=22; Slider dotSizeSlider; TextBlock dotSizeText; BotVisual dotPreview;
  // 全屏：面板铺满主显示器，方便演示；退出时回到原来的位置和大小。
- bool fullscreen=false; double[] beforeFull; Button fsButton;
+ bool fullscreen=false; double[] beforeFull; Button fsButton, historyButton;
  // 脑图：把标题和列表画成从左往右展开的树。
  Button mapTab; bool mapping=false, mapFromPreview=false, mapMoved=false, mapArmed=false, mapPanned=false; Grid mapView; Canvas mapCanvas; StackPanel mapEmpty; StackPanel mapBar;
- Button mapFitBtn, mapCopyBtn, mapSaveBtn, presentFit, presentBtn; Border presentBar; TextBlock mapHint;
+ Button mapFitBtn, mapCopyBtn, mapSaveBtn, presentFit, presentBtn; Border presentBar; TextBlock mapHint; DispatcherTimer mapHintTimer;
  // 演示使用独立状态，退出后恢复原来的窗口全屏状态和作者界面。
- DockPanel headerRow, tabRowPanel; Border editCard, noteBar; StackPanel shelfCaption; TextBlock bgName, accentName;
+ DockPanel headerRow, tabRowPanel; Border editCard, noteBar; TextBlock bgName, accentName;
  bool presenting=false, presentationWasFull=false; int presentCount=0; TextBlock presentProgress; readonly List<MapNode> presentNodes=new List<MapNode>(); readonly Dictionary<MapNode,UIElement> presentLines=new Dictionary<MapNode,UIElement>();
  bool Presenting { get { return presenting && fullscreen && mapping; } }
  ScaleTransform mapScale=new ScaleTransform(1,1); TranslateTransform mapPan=new TranslateTransform(); Point mapFrom, mapPanFrom; MapNode mapRoot, mapHit; readonly HashSet<string> mapFolds=new HashSet<string>();
@@ -91,7 +90,7 @@ partial class MainWindow : Window {
  // 预览里的选择：按住拖过几行就选中这些行，可以复制成纯文字或 Markdown 原文。
  Border previewPage; int selFrom=-1, selTo=-1, pressLine=-1, pressCaret=-1, pressAnchor=-1; bool pressArmed=false, selecting=false; Point pressAt;
  StackPanel selBar; Border selPill; TextBlock selInfo; static readonly string G_Copy=((char)0xE8C8).ToString(), G_Cut=((char)0xE8C6).ToString(), G_Delete=((char)0xE74D).ToString();
- TextBlock shelfHint; FrameworkElement shelfTray; Border settingsView; Button hoverOnBtn, hoverOffBtn, minusBtn, plusBtn, resetSaveBtn, resetPlaceBtn, resetSizeBtn; TextBlock hoverValue, savePathText;
+ Border settingsView; Button hoverOnBtn, hoverOffBtn, minusBtn, plusBtn, resetSaveBtn, resetPlaceBtn, resetSizeBtn; TextBlock hoverValue, savePathText;
 
  public MainWindow() {
   Directory.CreateDirectory(dir);
@@ -123,7 +122,7 @@ partial class MainWindow : Window {
   // 刘海属于面板，随面板一起从小圆点处展开、收回。刘海这一行的空白处和刘海本身都能按住拖动面板。
   var grip=new Border { Background=Brushes.Transparent, VerticalAlignment=VerticalAlignment.Stretch }; Draggable(grip,false,false,null);
   root.Children.Add(grip); root.Children.Add(notchShape); root.Children.Add(notch); Draggable(notch,false,true,null);
-  // 收起后只留一个小机器人；周围一块看不见的感应区负责悬停、点击、拖动和拖入（Alpha=1，肉眼不可见但能接住鼠标）。
+  // 收起后只留一个小机器人；周围一块看不见的感应区负责悬停、点击和拖动（Alpha=1，肉眼不可见但能接住鼠标）。
   dotLayer=new Grid { HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Top };
   dotHit=new Border { Width=72, Height=16, Background=new SolidColorBrush(Color.FromArgb(1,0,0,0)), Cursor=Cursors.Hand, ToolTip="BotNotes：点击或停留展开；按住拖动可移动" }; ToolTipService.SetInitialShowDelay(dotHit,1200);
   // 辉光、球体和眼睛一起随弹簧变形，变形原点始终在球心。
@@ -141,16 +140,18 @@ partial class MainWindow : Window {
   panel.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
   panel.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
   panel.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star) });
-  panel.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
-  panel.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
 
-  // 第一行：编辑 / 预览切换，右侧是设置、保持唤醒和收起。
+  // 第一行：编辑 / 预览切换，右侧是历史版本、保持唤醒、设置、全屏和收起。
   var header=headerRow=new DockPanel { LastChildFill=false, Margin=new Thickness(0,10,0,10), Background=Brushes.Transparent }; panel.Children.Add(header); Draggable(header,false,false,null);
   var close=Ui.Button(Ui.Icon(G_Close,10),"收起 (Esc)"); close.Width=30; close.Padding=new Thickness(0); close.Foreground=Palette.Muted; close.Click+=(s,e)=>Collapse(); DockPanel.SetDock(close,Dock.Right); header.Children.Add(close);
   pinButton=Ui.Button(Ui.Icon(G_Pin,14),""); pinButton.Width=30; pinButton.Padding=new Thickness(0); pinButton.Margin=new Thickness(0,0,2,0); pinButton.Click+=(s,e)=> { pinned=!pinned; if(pinned) transient=false; SaveSettings(); ShowPinState(); }; DockPanel.SetDock(pinButton,Dock.Right); header.Children.Add(pinButton); ShowPinState();
   settingsButton=Ui.Button(Ui.Icon(G_Settings,14),"设置"); settingsButton.Width=30; settingsButton.Padding=new Thickness(0); settingsButton.Margin=new Thickness(0,0,2,0); settingsButton.Foreground=Palette.Muted; settingsButton.Click+=(s,e)=> { if(settingsOpen) CloseSettings(); else OpenSettings(); }; DockPanel.SetDock(settingsButton,Dock.Right); header.Children.Add(settingsButton);
   fsButton=Ui.Button(Ui.Icon(G_Full,13),""); fsButton.Width=30; fsButton.Padding=new Thickness(0); fsButton.Margin=new Thickness(0,0,2,0); fsButton.Foreground=Palette.Muted; fsButton.Click+=(s,e)=>SetFullscreen(!fullscreen); DockPanel.SetDock(fsButton,Dock.Right); header.Children.Add(fsButton); ShowFullscreenState();
   sleepButton=Ui.Button(null,""); sleepButton.Width=30; sleepButton.Padding=new Thickness(0); sleepButton.Margin=new Thickness(0,0,2,0); sleepButton.Click+=(s,e)=>ToggleSleep(); DockPanel.SetDock(sleepButton,Dock.Right); header.Children.Add(sleepButton); ShowSleepState();
+  // 历史版本入口，和咖啡杯、全屏、设置同一种图标按钮；面板已打开时再点就关闭，草稿（未落盘）时禁用。
+  historyButton=Ui.Button(LineIcon.Make(LineIcon.History),"历史版本"); historyButton.Width=30; historyButton.Padding=new Thickness(0); historyButton.Margin=new Thickness(0,0,2,0); historyButton.Foreground=Palette.Muted; ToolTipService.SetShowOnDisabled(historyButton,true);
+  historyButton.Click+=(s,e)=> { if(historyOpen) CloseHistory(); else OpenHistory(currentNote); };
+  DockPanel.SetDock(historyButton,Dock.Right); header.Children.Add(historyButton);
   var seg=new Border { Background=Palette.Surface, CornerRadius=new CornerRadius(8), Padding=new Thickness(2) };
   var segRow=new StackPanel { Orientation=Orientation.Horizontal }; seg.Child=segRow;
   // 三段都只显示 16px 的自绘线条图标，宽度固定相同，切换时不会因为文字长短跳动；提示文字不变。
@@ -174,7 +175,7 @@ partial class MainWindow : Window {
   tabsScroll.ScrollChanged+=(s,e)=>UpdateTabEdges(); tabsScroll.SizeChanged+=(s,e)=>UpdateTabEdges(); tabRow.SizeChanged+=(s,e)=>UpdateTabEdges();
   tabs=new StackPanel { Orientation=Orientation.Horizontal, HorizontalAlignment=HorizontalAlignment.Left }; tabsScroll.Content=tabs; tabs.SizeChanged+=(s,e)=>UpdateTabEdges();
 
-  // 编辑区：正文、格式按钮和保存状态放在同一张卡片里。
+  // 编辑区：正文和格式按钮放在同一张卡片里。
   var editBorder=editCard=new Border { BorderBrush=Palette.Line, BorderThickness=new Thickness(0), CornerRadius=new CornerRadius(0), Background=Brushes.Transparent, ClipToBounds=true }; Grid.SetRow(editBorder,2); panel.Children.Add(editBorder);
   var editGrid=new Grid(); editGrid.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star) }); editGrid.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto }); editBorder.Child=editGrid;
   editor=new TextBox { Background=Brushes.Transparent, Foreground=Palette.Text, BorderThickness=new Thickness(0), FontSize=Scaled(15), Padding=new Thickness(10,6,10,10), AcceptsReturn=true, AcceptsTab=true, TextWrapping=TextWrapping.Wrap, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, CaretBrush=Palette.Text, SelectionBrush=Palette.Accent, SelectionOpacity=0.35, FocusVisualStyle=null };
@@ -192,11 +193,8 @@ partial class MainWindow : Window {
   previewPage.LostMouseCapture+=(s,e)=> { pressArmed=false; selecting=false; };
   previewScroll.Content=previewPage; editGrid.Children.Add(previewScroll);
   BuildMapView(editGrid);
-  editor.TextChanged+=(s,e)=> { if(loading) return; if(currentNote==DraftKey && editor.Text.Length>0) EnsureDraftFile(); SetStatus("正在保存…",Palette.Muted); timer.Stop(); timer.Start(); };
+  editor.TextChanged+=(s,e)=> { if(loading) return; if(currentNote==DraftKey && editor.Text.Length>0) EnsureDraftFile(); timer.Stop(); timer.Start(); };
   var bar=new DockPanel { Margin=new Thickness(2,4,2,4) }; var barBorder=noteBar=new Border { BorderBrush=Palette.Line, BorderThickness=new Thickness(0,1,0,0), Child=bar, MinHeight=38 }; Grid.SetRow(barBorder,1); editGrid.Children.Add(barBorder);
-  var status=new StackPanel { Orientation=Orientation.Horizontal, VerticalAlignment=VerticalAlignment.Center, Margin=new Thickness(12,0,0,0) }; DockPanel.SetDock(status,Dock.Left); headerRow.Children.Add(status);
-  statusDot=new System.Windows.Shapes.Ellipse { Width=6, Height=6, Fill=Palette.Accent, Margin=new Thickness(0,1,7,0), VerticalAlignment=VerticalAlignment.Center }; status.Children.Add(statusDot);
-  saveStatus=new TextBlock { Text="已自动保存", Foreground=Palette.Muted, FontSize=11.5, VerticalAlignment=VerticalAlignment.Center }; status.Children.Add(saveStatus);
   var tools=new Grid(); bar.Children.Add(tools);
   toolbar=new StackPanel { Orientation=Orientation.Horizontal }; tools.Children.Add(toolbar);
   // 字号入口放在格式栏最右边，和左边按钮之间留空；脑图有自己的底栏，不显示它。
@@ -225,39 +223,18 @@ partial class MainWindow : Window {
   toolbar.Children.Add(new Border { Width=1, Height=16, Background=Palette.Line, Margin=new Thickness(5,0,7,0), VerticalAlignment=VerticalAlignment.Center });
   AddTool(LineIcon.Make(LineIcon.Quote),"引用（对选中的每一行生效）",null,null,"quote"); AddTool(LineIcon.Make(LineIcon.Bullets,LineIcon.BulletDots),"无序列表（对选中的每一行生效）",null,null,"bullet"); AddTool(LineIcon.Make(LineIcon.Numbers),"有序列表（对选中的每一行生效）",null,null,"number"); AddTool(LineIcon.Make(LineIcon.Tasks),"待办事项（对选中的每一行生效）",null,null,"task");
 
-  // 文件暂存
-  var caption=shelfCaption=new StackPanel { Orientation=Orientation.Horizontal, Margin=new Thickness(2,16,2,8) }; Grid.SetRow(caption,3); panel.Children.Add(caption);
-  caption.Children.Add(new TextBlock { Text="文件暂存", Foreground=Palette.Muted, FontSize=12, FontWeight=FontWeights.SemiBold });
-  shelfCount=new TextBlock { Foreground=Palette.Muted, Opacity=0.75, FontSize=12, Margin=new Thickness(6,0,0,0) }; caption.Children.Add(shelfCount);
-  shelfBorder=new Border { Background=Brushes.Transparent, MinHeight=40, AllowDrop=true }; Grid.SetRow(shelfBorder,4); panel.Children.Add(shelfBorder);
-  var shelfGrid=new Grid(); shelfBorder.Child=shelfGrid;
-  dropZone=new System.Windows.Shapes.Rectangle { RadiusX=9, RadiusY=9, Stroke=Palette.Rule, StrokeThickness=1, StrokeDashArray=new DoubleCollection(new double[]{4,3}), Fill=Brushes.Transparent, SnapsToDevicePixels=true };
-  shelfGrid.Children.Add(dropZone);
-  var scroll=new ScrollViewer { HorizontalScrollBarVisibility=ScrollBarVisibility.Hidden, VerticalScrollBarVisibility=ScrollBarVisibility.Disabled, VerticalAlignment=VerticalAlignment.Center }; Ui.HorizontalWheel(scroll);
-  shelf=new StackPanel { Orientation=Orientation.Horizontal }; scroll.Content=shelf; shelfGrid.Children.Add(scroll);
-  shelfBorder.DragEnter+=(s,e)=> { if(!HasFiles(e)) return; dropZone.Visibility=Visibility.Visible; dropZone.Stroke=Palette.Accent; dropZone.Fill=Palette.AccentBg; };
-  shelfBorder.DragLeave+=(s,e)=>ShowDropZone();
-
-  // 设置面板盖在标签、编辑区和暂存区上方。
-  settingsView=BuildSettings(); Grid.SetRow(settingsView,1); Grid.SetRowSpan(settingsView,4); panel.Children.Add(settingsView);
-  historyView=BuildHistoryView(); Grid.SetRow(historyView,1); Grid.SetRowSpan(historyView,4); panel.Children.Add(historyView);
-  confirmView=BuildConfirmCard(); Grid.SetRow(confirmView,1); Grid.SetRowSpan(confirmView,4); panel.Children.Add(confirmView);
+  // 设置面板盖在标签和编辑区上方。
+  settingsView=BuildSettings(); Grid.SetRow(settingsView,1); Grid.SetRowSpan(settingsView,2); panel.Children.Add(settingsView);
+  historyView=BuildHistoryView(); Grid.SetRow(historyView,1); Grid.SetRowSpan(historyView,2); panel.Children.Add(historyView);
+  confirmView=BuildConfirmCard(); Grid.SetRow(confirmView,1); Grid.SetRowSpan(confirmView,2); panel.Children.Add(confirmView);
   BuildResizeGrips(root);
 
-  // 整个窗口都可以接收文件；拖到收起的顶部条上会先展开。
-  AllowDrop=true;
-  DragEnter+=(s,e)=> { if(!HasFiles(e)) return; FileDragEntered(); };
-  DragOver+=(s,e)=> { bool ok=HasFiles(e); e.Effects=ok?DragDropEffects.Copy:DragDropEffects.None; if(ok) dragInside=true; e.Handled=true; };
-  DragLeave+=(s,e)=> { dragInside=false; if(expanded && transient) leaveTimer.Start(); }; // 拖进来时露出的暂存区不在离开时收回，免得在子元素间移动时来回跳
-  Drop+=(s,e)=> { dragInside=false; ShowDropZone(); UpdatePresenting(); if(HasFiles(e)) { transient=false; AddFiles((string[])e.Data.GetData(DataFormats.FileDrop)); e.Handled=true; } };
-
   timer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(500) }; timer.Tick+=(s,e)=>{ timer.Stop(); if(SaveNote()) { if(GetNoteTitle(currentNote)!=currentTitle) RefreshTabs(); } };
-  // 悬停或拖入展开的面板，在用户还没点进去时，鼠标离开就收回。
-  leaveTimer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(450) }; leaveTimer.Tick+=(s,e)=> { leaveTimer.Stop(); if(expanded && transient && !pinned && !dragInside && !IsMouseOver) Collapse(); };
+  // 悬停展开的面板，在用户还没点进去时，鼠标离开就收回。
+  leaveTimer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(450) }; leaveTimer.Tick+=(s,e)=> { leaveTimer.Stop(); if(expanded && transient && !pinned && !IsMouseOver) Collapse(); };
 
-  try { string f=Path.Combine(dir,"shelf.txt"); if(File.Exists(f)) foreach(var line in File.ReadAllLines(f)) try {files.Add(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(line)));} catch {} } catch(Exception ex) { shelfReadable=false; Msg("暂存区读取失败，自动保存已停用以保护原文件："+ex.Message); }
   LoadFolds(); LoadInitialTabs(); CleanupHistoryAll(dir,DateTime.Now);
-  loading=false; RefreshShelf(); RefreshTabs(); SetPreview(false);
+  loading=false; RefreshTabs(); SetPreview(false);
 
   tray=new Forms.NotifyIcon { Text="BotNotes", Icon=LoadAppIcon(), Visible=true };
   var menu=new Forms.ContextMenuStrip { ShowImageMargin=false, Font=new D.Font("Microsoft YaHei UI",9f), Padding=new Forms.Padding(0,4,0,4) }; var trayLook=new TrayMenuRenderer(); menu.Renderer=trayLook;
@@ -274,7 +251,7 @@ partial class MainWindow : Window {
   PreviewMouseDown+=(s,e)=> { if(expanded) transient=false; };
   MouseEnter+=(s,e)=>leaveTimer.Stop();
   MouseLeave+=(s,e)=> { if(expanded && transient) leaveTimer.Start(); };
-  Deactivated+=(s,e)=> { if(expanded && !pinned && !fullscreen && modal==0 && !draggingOut && !confirmOpen) Collapse(); };
+  Deactivated+=(s,e)=> { if(expanded && !pinned && !fullscreen && modal==0 && !confirmOpen) Collapse(); };
   Closing+=(s,e)=> {if(!quitting) {e.Cancel=true; Collapse();}};
   body.Visibility=Visibility.Collapsed; ApplyChrome(false); PlaceWindow();
   // 打开软件时直接展开，一眼就能看到面板在哪里；点别处、Esc 或 × 后再收成小圆点。
@@ -400,13 +377,6 @@ partial class MainWindow : Window {
   pinButton.Background=pinned?Palette.AccentBg:Brushes.Transparent; pinButton.Foreground=pinned?Palette.Accent:Palette.Muted;
   pinButton.ToolTip=pinned?"已固定：点别处不会收起。点击取消固定":"固定窗口：点别处不收起，一直显示在最前";
  }
- void ShowDropZone() {
-  if(dropZone==null) return; bool empty=files.Count==0;
-  // 空状态下默认不画虚线框，只在拖文件进窗口（dragInside）时露出来；有文件时文件条自己占满。
-  dropZone.Visibility=empty && dragInside?Visibility.Visible:Visibility.Collapsed; dropZone.Stroke=Palette.Rule; dropZone.Fill=Brushes.Transparent;
-  shelfCount.Text=empty?"":files.Count.ToString();
- }
- void SetStatus(string text,Brush tone) { if(saveStatus==null) return; saveStatus.Text=text; saveStatus.Foreground=tone==Palette.Warn?Palette.Warn:Palette.Muted; statusDot.Fill=tone; }
  void ShowSleepState() {
   // 咖啡杯：关着是空杯，开着冒热气并用强调色。
   sleepButton.Content=LineIcon.Make(awake?LineIcon.CupSteam:LineIcon.Cup,null,18);

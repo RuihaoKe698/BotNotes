@@ -21,7 +21,6 @@ partial class MainWindow {
  // ——— 拖动 ———
  // 按下后移动超过 4px 才算拖动，否则当作点击。拖小圆点时它可以去屏幕任意位置，面板跟着它挪到放得下的地方；
  // 拖面板时小圆点回到面板顶部正中，收起时缩回那里。
- void FileDragEntered() { dragInside=true; leaveTimer.Stop(); if(!expanded) Expand(true); UpdatePresenting(); }
  void Draggable(UIElement handle,bool movesDot,bool preview,Action click) {
   MouseButtonEventHandler down=(s,e)=> {
    if(fullscreen) return; // 全屏时不能拖动面板；点刘海仍是收起
@@ -190,17 +189,6 @@ partial class MainWindow {
   headerRow.Visibility=tabRowPanel.Visibility=vis;
   bool barNeeded=Writing || mapping || editingBlock>=0;
   noteBar.Visibility=p || !barNeeded?Visibility.Collapsed:Visibility.Visible;
-  // 脑图里暂存区是空的就先收起，把高度让给脑图；拖文件进来或里面已有文件时照常显示。
-  bool shelfOff=p || (mapping && files.Count==0 && !dragInside);
-  bool slim=files.Count==0 && !dragInside;
-  shelfCaption.Visibility=shelfOff || slim?Visibility.Collapsed:Visibility.Visible;
-  shelfBorder.Visibility=shelfOff?Visibility.Collapsed:Visibility.Visible;
-  shelfBorder.MinHeight=slim?24:40; shelfBorder.Margin=new Thickness(0,slim?10:0,0,0);
-  // 空状态是一条 24px 高的图标条：只显示托盘图标，虚线框收起，提示换成整条悬停提示；拖文件进来时恢复 40px 投放区和“松开…”提示。
-  shelfBorder.ToolTip=slim?"文件暂存：拖文件到这里，之后可以再拖到其他应用":null;
-  if(dropZone!=null && files.Count==0) dropZone.Visibility=dragInside?Visibility.Visible:Visibility.Collapsed;
-  if(shelfTray!=null) shelfTray.Visibility=slim?Visibility.Visible:Visibility.Collapsed;
-  if(shelfHint!=null) { shelfHint.Text=slim?"":"松开鼠标放进暂存区"; shelfHint.FontSize=12.5; shelfHint.Visibility=slim?Visibility.Collapsed:Visibility.Visible; }
   mapHint.Visibility=p || mapRoot==null?Visibility.Collapsed:Visibility.Visible;
   editCard.BorderThickness=new Thickness(0); editCard.CornerRadius=new CornerRadius(0); editCard.Background=p?Palette.Panel:Brushes.Transparent;
   outerBox.Padding=p?new Thickness(0):new Thickness(16,0,16,16);

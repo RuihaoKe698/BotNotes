@@ -564,11 +564,15 @@ partial class MainWindow {
   loading=true; editor.Text=text; loading=false;
   ClearHistory();
   if(previewing) RenderPreview(); else if(mapping) RenderMap(true);
-  bool ok=SaveNote(true);
+  SaveNote(true);
   RefreshTabs();
   CloseHistory();
   if(previewing) RenderPreview(); else if(mapping) RenderMap(true); else if(expanded) editor.Focus();
-  if(ok) SetStatus("已恢复到 "+HistoryTimeLabel(snap.Time,DateTime.Now),Palette.Accent);
+ }
+ // 标题行的历史版本按钮：草稿还没落盘，没有历史可看。
+ void UpdateHistoryButton() {
+  if(historyButton==null) return;
+  historyButton.IsEnabled=currentNote!=DraftKey;
  }
 
  // 在打开、切换、收起、关闭、退出等时机挂快照；草稿不记。
