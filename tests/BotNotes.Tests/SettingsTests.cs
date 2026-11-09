@@ -31,6 +31,7 @@ namespace BotNotes.Tests
      HoverEnabled = false,
      Pinned = true,
      BotSize = 36,
+     FontSize = 4,
      Accent = Color.FromRgb(0x9C, 0xC7, 0xF5),
      Background = Color.FromRgb(0x1C, 0x1D, 0x21),
      ArchiveDir = Path.Combine(sb.Root, "custom-archive")
@@ -50,6 +51,7 @@ namespace BotNotes.Tests
     Assert.Equal(saved.HoverEnabled, loaded.HoverEnabled);
     Assert.Equal(saved.Pinned, loaded.Pinned);
     Assert.Equal(saved.BotSize, loaded.BotSize);
+    Assert.Equal(saved.FontSize, loaded.FontSize);
     Assert.Equal(saved.Accent, loaded.Accent);
     Assert.Equal(saved.Background, loaded.Background);
     Assert.Equal(saved.ArchiveDir, loaded.ArchiveDir);
@@ -72,6 +74,7 @@ namespace BotNotes.Tests
    Assert.Equal(d.HoverEnabled, s.HoverEnabled);
    Assert.Equal(d.Pinned, s.Pinned);
    Assert.Equal(d.BotSize, s.BotSize);
+   Assert.Equal(d.FontSize, s.FontSize);
    Assert.Equal(d.Accent, s.Accent);
    Assert.Equal(d.Background, s.Background);
    Assert.Null(s.ArchiveDir);
@@ -116,9 +119,35 @@ namespace BotNotes.Tests
    Assert.Equal(d.PanelTop, s.PanelTop);
    Assert.Equal(d.HoverDelayMs, s.HoverDelayMs);
    Assert.Equal(d.BotSize, s.BotSize);
+   Assert.Equal(d.FontSize, s.FontSize);
    Assert.Equal(d.Accent, s.Accent);
    Assert.Equal(d.Background, s.Background);
    Assert.Null(s.ArchiveDir);
+  }
+
+  [Fact]
+  public void FontSizeStep_DefaultsToStandard_AcceptsEveryStep_AndFallsBackWhenInvalid()
+  {
+   // 0–4 五档，2 是标准；缺省或非法都回到标准。
+   Assert.Equal(2, Parse().FontSize);
+   Assert.Equal(2, new MainWindow.SettingsData().FontSize);
+
+   for (int i = 0; i <= 4; i++)
+   {
+    Assert.Equal(i, Parse("fontSize=" + i).FontSize);
+   }
+
+   foreach (string bad in new[] { "fontSize=5", "fontSize=-1", "fontSize=abc", "fontSize=", "fontSize=2.0" })
+   {
+    Assert.Equal(2, Parse(bad).FontSize);
+   }
+
+   // 写出再读回。
+   string[] lines = MainWindow.SerializeSettings(new MainWindow.SettingsData { FontSize = 4 });
+   Assert.Contains("fontSize=4", lines);
+   Assert.Equal(4, Parse(lines).FontSize);
+
+   Assert.Contains("fontSize=2", MainWindow.SerializeSettings(new MainWindow.SettingsData()));
   }
 
   [Fact]

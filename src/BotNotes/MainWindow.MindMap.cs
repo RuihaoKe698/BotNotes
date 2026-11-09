@@ -150,13 +150,13 @@ partial class MainWindow {
   if(task>=0) { var mark=CheckMark(task==1); mark.VerticalAlignment=VerticalAlignment.Top; mark.Margin=new Thickness(0,2,6,0); var row=new StackPanel { Orientation=Orientation.Horizontal }; row.Children.Add(mark); row.Children.Add(tb); content=row; }
   var el=new Border { Child=content, Tag=n };
   // 换行宽度收窄（叶子约 13 个字），长句往下长、不往右撑宽，适应窗口时字不会被缩得太小。
-  if(n.Depth==0) { tb.FontSize=18; tb.FontWeight=FontWeights.SemiBold; tb.MaxWidth=260; tb.Foreground=Palette.Panel; el.Background=Palette.Accent; el.CornerRadius=new CornerRadius(12); el.Padding=new Thickness(18,10,18,11); }
-  else if(n.Depth==1) { tb.FontSize=15; tb.FontWeight=FontWeights.SemiBold; tb.MaxWidth=200; el.Background=new SolidColorBrush(Palette.Mix(surface,col,0.2)); el.BorderBrush=new SolidColorBrush(col); el.BorderThickness=new Thickness(1.5); el.CornerRadius=new CornerRadius(9); el.Padding=new Thickness(13,7,13,8); }
+  if(n.Depth==0) { tb.FontSize=Scaled(18); tb.FontWeight=FontWeights.SemiBold; tb.MaxWidth=260; tb.Foreground=Palette.Panel; el.Background=Palette.Accent; el.CornerRadius=new CornerRadius(12); el.Padding=new Thickness(18,10,18,11); }
+  else if(n.Depth==1) { tb.FontSize=Scaled(15); tb.FontWeight=FontWeights.SemiBold; tb.MaxWidth=200; el.Background=new SolidColorBrush(Palette.Mix(surface,col,0.2)); el.BorderBrush=new SolidColorBrush(col); el.BorderThickness=new Thickness(1.5); el.CornerRadius=new CornerRadius(9); el.Padding=new Thickness(13,7,13,8); }
   else if(n.Heading) { // 深色背景上淡底不够分辨，加深一点并加一道淡的分支色描边
-   tb.FontSize=14; tb.FontWeight=FontWeights.SemiBold; tb.MaxWidth=200; el.Background=new SolidColorBrush(Palette.Mix(surface,col,light?0.1:0.16)); el.CornerRadius=new CornerRadius(7); el.Padding=new Thickness(10,5,10,6);
+   tb.FontSize=Scaled(14); tb.FontWeight=FontWeights.SemiBold; tb.MaxWidth=200; el.Background=new SolidColorBrush(Palette.Mix(surface,col,light?0.1:0.16)); el.CornerRadius=new CornerRadius(7); el.Padding=new Thickness(10,5,10,6);
    if(!light) { el.BorderBrush=new SolidColorBrush(Color.FromArgb(0x8C,col.R,col.G,col.B)); el.BorderThickness=new Thickness(1); }
   }
-  else { tb.FontSize=13.5; tb.MaxWidth=task>=0?175:190; el.Background=Brushes.Transparent; el.Padding=new Thickness(6,3,6,4); }
+  else { tb.FontSize=Scaled(13.5); tb.MaxWidth=task>=0?175:190; el.Background=Brushes.Transparent; el.Padding=new Thickness(6,3,6,4); }
   if(n.Full!=n.Text) el.ToolTip=n.Full;
   if(n.Kids.Count>0) el.Cursor=Cursors.Hand;
   el.Measure(new Size(double.PositiveInfinity,double.PositiveInfinity)); n.W=Math.Ceiling(el.DesiredSize.Width); n.H=Math.Ceiling(el.DesiredSize.Height); n.El=el;
@@ -197,9 +197,10 @@ partial class MainWindow {
    if(!Presenting && n.Folded && n.Kids.Count>0) { // 折起来的节点右边挂一个“+N”，点它也能展开
     // 徽标字号和叶子一样大，用分支色，演示时一眼能看出“这里还收着几项”
     var bc=Palette.Branch(n.Branch);
-    var badge=new Border { Tag=new MapFold { N=n }, Cursor=Cursors.Hand, Height=22, MinWidth=26, CornerRadius=new CornerRadius(11), Padding=new Thickness(8,0,8,0), Background=new SolidColorBrush(Palette.Mix(Palette.Surface.Color,bc,0.14)), BorderBrush=new SolidColorBrush(bc), BorderThickness=new Thickness(1.5), ToolTip="已折叠，点击展开",
-     Child=new TextBlock { Text="+"+Descendants(n), FontSize=13, FontWeight=FontWeights.SemiBold, FontFamily=FontFamily, Foreground=new SolidColorBrush(bc), VerticalAlignment=VerticalAlignment.Center, HorizontalAlignment=HorizontalAlignment.Center } };
-    Canvas.SetLeft(badge,n.X+n.W+8); Canvas.SetTop(badge,n.Y+n.H/2-11); mapCanvas.Children.Add(badge);
+    double badgeH=Scaled(22);
+    var badge=new Border { Tag=new MapFold { N=n }, Cursor=Cursors.Hand, Height=badgeH, MinWidth=Scaled(26), CornerRadius=new CornerRadius(badgeH/2), Padding=new Thickness(Scaled(8),0,Scaled(8),0), Background=new SolidColorBrush(Palette.Mix(Palette.Surface.Color,bc,0.14)), BorderBrush=new SolidColorBrush(bc), BorderThickness=new Thickness(1.5), ToolTip="已折叠，点击展开",
+     Child=new TextBlock { Text="+"+Descendants(n), FontSize=Scaled(13), FontWeight=FontWeights.SemiBold, FontFamily=FontFamily, Foreground=new SolidColorBrush(bc), VerticalAlignment=VerticalAlignment.Center, HorizontalAlignment=HorizontalAlignment.Center } };
+    Canvas.SetLeft(badge,n.X+n.W+8); Canvas.SetTop(badge,n.Y+n.H/2-badgeH/2); mapCanvas.Children.Add(badge);
    }
   }
   // 选中的节点：外面一圈强调色描边；有下级时右边挂一个折叠开关（折起后就是“+N”）。
@@ -332,7 +333,7 @@ partial class MainWindow {
   if(n==null || Presenting) return;
   if(n.Line<0 || n.Kind==4) { SetStatus("这个节点请切到“编辑”里改",Palette.Muted); return; }
   LoadLines(); string pre, body; SplitLine(lines[n.Line],out pre,out body);
-  var box=Ui.Input(body); box.FontSize=n.Depth==0?18:n.Depth==1?15:n.Heading?14:13.5; box.FontWeight=n.Heading || n.Depth<=1?FontWeights.SemiBold:FontWeights.Normal;
+  var box=Ui.Input(body); box.FontSize=Scaled(n.Depth==0?18:n.Depth==1?15:n.Heading?14:13.5); box.FontWeight=n.Heading || n.Depth<=1?FontWeights.SemiBold:FontWeights.Normal;
   box.MinWidth=Math.Max(n.W+8,140); box.MaxWidth=360; box.Padding=new Thickness(6,3,6,4); box.BorderBrush=Palette.Accent;
   Canvas.SetLeft(box,n.X-4); Canvas.SetTop(box,n.Y+n.H/2-(box.FontSize*1.33+9)/2); Panel.SetZIndex(box,10); mapCanvas.Children.Add(box);
   mapBox=box; mapBoxLine=n.Line; mapBoxPre=pre; mapBoxOld=body; if(mapRing!=null) mapRing.Visibility=Visibility.Collapsed; // 输入框自己有强调色描边

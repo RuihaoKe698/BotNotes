@@ -282,7 +282,7 @@ partial class MainWindow {
   if(kind==K_Blank) return Host(new Border { Height=10 },new Thickness(0),start,null);
   if(kind==K_Code) {
    var inner=new List<string>(); for(int k=start+1;k<start+count;k++) if(!(k==start+count-1 && lines[k].TrimStart().StartsWith("```"))) inner.Add(lines[k]);
-   var code=new TextBlock { Text=string.Join("\n",inner), FontFamily=Ui.Mono, FontSize=13, LineHeight=20, Foreground=Palette.Text, TextWrapping=TextWrapping.Wrap };
+   var code=new TextBlock { Text=string.Join("\n",inner), FontFamily=Ui.Mono, FontSize=Scaled(13), LineHeight=Scaled(20), Foreground=Palette.Text, TextWrapping=TextWrapping.Wrap };
    var box=new Border { Background=Palette.Raised, CornerRadius=new CornerRadius(6), Padding=new Thickness(12,8,12,8), Child=code, MinHeight=20 };
    return Host(box,new Thickness(0,2,0,6),count>1?start+1:start,null);
   }
@@ -291,7 +291,7 @@ partial class MainWindow {
   bool afterText=prev>=0 && blocks[prev][2]!=K_Blank;
   if((m=HeadingRe.Match(line)).Success) {
    // 六级标题各有字号；五、六级用次要文字色，和正文拉开但不抢一到四级。
-   int lv=m.Groups[1].Length; tb.FontWeight=FontWeights.SemiBold; tb.FontSize=HeadSize[lv-1]; tb.LineHeight=HeadLine[lv-1]; if(lv>=5) tb.Foreground=Palette.Muted;
+   int lv=m.Groups[1].Length; tb.FontWeight=FontWeights.SemiBold; tb.FontSize=Scaled(HeadSize[lv-1]); tb.LineHeight=Scaled(HeadLine[lv-1]); if(lv>=5) tb.Foreground=Palette.Muted;
    AddInline(tb.Inlines,m.Groups[2].Value,m.Groups[2].Index);
    var pad=new Thickness(0,afterText?(lv<=2?12:8):0,0,4);
    if(foldCount[bi]==0) return Host(tb,pad,start,tb);
@@ -317,24 +317,24 @@ partial class MainWindow {
   }
   if((m=Regex.Match(line,@"^\s*[-*+]\s+\[([ xX])\]\s*(.*)$")).Success) {
    bool done=m.Groups[1].Value!=" "; if(done) tb.Foreground=Palette.Muted; AddInline(tb.Inlines,m.Groups[2].Value,m.Groups[2].Index);
-   var mark=new Border { Background=Brushes.Transparent, Cursor=Cursors.Hand, Child=CheckMark(done), ToolTip=done?"标记为未完成":"标记为完成", VerticalAlignment=VerticalAlignment.Top, Padding=new Thickness(0,4.5,6,4) };
+   var mark=new Border { Background=Brushes.Transparent, Cursor=Cursors.Hand, Child=CheckMark(done), ToolTip=done?"标记为未完成":"标记为完成", VerticalAlignment=VerticalAlignment.Top, Padding=new Thickness(0,(BodyLine-15)/2,6,4) };
    int ln=start; mark.MouseLeftButtonDown+=(s,e)=> { ToggleTask(ln); e.Handled=true; };
    return Host(ListRow(mark,tb),new Thickness(0,1,0,1),start,tb);
   }
   if((m=Regex.Match(line,@"^\s*[-*+]\s+(.*)$")).Success) {
    AddInline(tb.Inlines,m.Groups[1].Value,m.Groups[1].Index);
-   return Host(ListRow(new System.Windows.Shapes.Ellipse { Width=5, Height=5, Fill=Palette.Muted, Margin=new Thickness(6,9.5,0,0), HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Top },tb),new Thickness(0,1,0,1),start,tb);
+   return Host(ListRow(new System.Windows.Shapes.Ellipse { Width=5, Height=5, Fill=Palette.Muted, Margin=new Thickness(6,(BodyLine-5)/2,0,0), HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Top },tb),new Thickness(0,1,0,1),start,tb);
   }
   if((m=Regex.Match(line,@"^\s*(\d+)[.)]\s+(.*)$")).Success) {
    AddInline(tb.Inlines,m.Groups[2].Value,m.Groups[2].Index);
-   return Host(ListRow(new TextBlock { Text=m.Groups[1].Value+".", Foreground=Palette.Muted, FontSize=13.5, LineHeight=BodyLine, VerticalAlignment=VerticalAlignment.Top },tb),new Thickness(0,1,0,1),start,tb);
+   return Host(ListRow(new TextBlock { Text=m.Groups[1].Value+".", Foreground=Palette.Muted, FontSize=Scaled(13.5), LineHeight=BodyLine, VerticalAlignment=VerticalAlignment.Top },tb),new Thickness(0,1,0,1),start,tb);
   }
   if(Regex.IsMatch(line,@"^\s*([-*_])(\s*\1){2,}\s*$")) return Host(new Border { Height=1, Background=Palette.Line },new Thickness(0,11,0,11),start,null);
   AddInline(tb.Inlines,line,0);
   return Host(tb,new Thickness(0,1,0,3),start,tb);
  }
- static Grid ListRow(FrameworkElement marker,TextBlock text) {
-  var g=new Grid(); g.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(24) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
+ Grid ListRow(FrameworkElement marker,TextBlock text) {
+  var g=new Grid(); g.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(Scaled(24)) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
   g.Children.Add(marker); Grid.SetColumn(text,1); g.Children.Add(text); return g;
  }
  static FrameworkElement CheckMark(bool done) {
@@ -350,7 +350,7 @@ partial class MainWindow {
    string x=m.Value; Run r;
    if(x.StartsWith("**")) { r=new Run(x.Substring(2,x.Length-4)) { Tag=baseOffset+m.Index+2 }; r.FontWeight=FontWeights.SemiBold; }
    else if(x.StartsWith("~~")) { r=new Run(x.Substring(2,x.Length-4)) { Tag=baseOffset+m.Index+2 }; r.TextDecorations=TextDecorations.Strikethrough; r.Foreground=Palette.Muted; }
-   else if(x.StartsWith("`")) { r=new Run(" "+x.Substring(1,x.Length-2)+" ") { Tag=baseOffset+m.Index }; r.FontFamily=Ui.Mono; r.FontSize=13; r.Background=Palette.Raised; }
+   else if(x.StartsWith("`")) { r=new Run(" "+x.Substring(1,x.Length-2)+" ") { Tag=baseOffset+m.Index }; r.FontFamily=Ui.Mono; r.FontSize=Scaled(13); r.Background=Palette.Raised; }
    else if(x.StartsWith("*")) { r=new Run(x.Substring(1,x.Length-2)) { Tag=baseOffset+m.Index+1 }; r.FontStyle=FontStyles.Italic; }
    else {
     int end=x.IndexOf("]("); string url=x.Substring(end+2,x.Length-end-3);
@@ -391,7 +391,7 @@ partial class MainWindow {
  void BeginEdit(int bi,int caret) {
   int start=blocks[bi][0], count=blocks[bi][1], kind=blocks[bi][2];
   editingBlock=bi; editStart=start; editCount=count; editOrigCount=count;
-  var box=new TextBox { Text=string.Join("\n",lines.GetRange(start,count)), Background=Brushes.Transparent, Foreground=Palette.Text, CaretBrush=Palette.Text, BorderThickness=new Thickness(0), Padding=new Thickness(0), AcceptsReturn=true, AcceptsTab=true, TextWrapping=TextWrapping.Wrap, FontSize=kind==K_Code?13:BodySize, FontFamily=kind==K_Code?Ui.Mono:FontFamily, SelectionBrush=Palette.Accent, SelectionOpacity=0.35, FocusVisualStyle=null, VerticalContentAlignment=VerticalAlignment.Center, MinHeight=BodyLine };
+  var box=new TextBox { Text=string.Join("\n",lines.GetRange(start,count)), Background=Brushes.Transparent, Foreground=Palette.Text, CaretBrush=Palette.Text, BorderThickness=new Thickness(0), Padding=new Thickness(0), AcceptsReturn=true, AcceptsTab=true, TextWrapping=TextWrapping.Wrap, FontSize=kind==K_Code?Scaled(13):BodySize, FontFamily=kind==K_Code?Ui.Mono:FontFamily, SelectionBrush=Palette.Accent, SelectionOpacity=0.35, FocusVisualStyle=null, VerticalContentAlignment=VerticalAlignment.Center, MinHeight=BodyLine };
   lineBox=box; UpdateToolbar(); Dispatcher.BeginInvoke(new Action(()=> { if(lineBox==box) box.BringIntoView(); }),DispatcherPriority.Loaded);
   var frame=new Border { Background=Palette.Raised, CornerRadius=new CornerRadius(6), Margin=new Thickness(-8,1,-8,3), Padding=new Thickness(6,2,6,2), Child=box, Cursor=Cursors.IBeam };
   frame.MouseLeftButtonDown+=(s,e)=> { box.Focus(); e.Handled=true; };

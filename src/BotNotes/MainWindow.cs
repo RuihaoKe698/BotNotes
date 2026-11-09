@@ -37,7 +37,6 @@ partial class MainWindow : Window {
  const uint ES_CONTINUOUS=0x80000000, ES_SYSTEM_REQUIRED=1;
  const string G_Note="\uE70B", G_Close="\uE8BB", G_Add="\uE710", G_Minus="\uE738", G_Archive="\uE7B8", G_Sun="\uE706", G_File="\uE8A5", G_Folder="\uE8B7", G_Image="\uEB9F", G_Settings="\uE713", G_Pin="\uE718", G_Open="\uE8E5";
  const int K_Line=0, K_Blank=1, K_Code=2;
- const double BodySize=14.5, BodyLine=24;
  readonly List<string> files=new List<string>();
  readonly List<string> noteNames=new List<string>();
  TextBox editor; TextBlock saveStatus; System.Windows.Shapes.Ellipse statusDot; StackPanel shelf, toolbar, tabs; ScrollViewer tabsScroll; string currentNote="note.md", currentTitle="";
@@ -176,11 +175,13 @@ partial class MainWindow : Window {
   // 编辑区：正文、格式按钮和保存状态放在同一张卡片里。
   var editBorder=editCard=new Border { BorderBrush=Palette.Line, BorderThickness=new Thickness(0), CornerRadius=new CornerRadius(0), Background=Brushes.Transparent, ClipToBounds=true }; Grid.SetRow(editBorder,2); panel.Children.Add(editBorder);
   var editGrid=new Grid(); editGrid.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star) }); editGrid.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto }); editBorder.Child=editGrid;
-  editor=new TextBox { Background=Brushes.Transparent, Foreground=Palette.Text, BorderThickness=new Thickness(0), FontSize=15, Padding=new Thickness(10,6,10,10), AcceptsReturn=true, AcceptsTab=true, TextWrapping=TextWrapping.Wrap, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, CaretBrush=Palette.Text, SelectionBrush=Palette.Accent, SelectionOpacity=0.35, FocusVisualStyle=null };
-  editor.SetValue(TextBlock.LineHeightProperty,25.0);
+  editor=new TextBox { Background=Brushes.Transparent, Foreground=Palette.Text, BorderThickness=new Thickness(0), FontSize=Scaled(15), Padding=new Thickness(10,6,10,10), AcceptsReturn=true, AcceptsTab=true, TextWrapping=TextWrapping.Wrap, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, CaretBrush=Palette.Text, SelectionBrush=Palette.Accent, SelectionOpacity=0.35, FocusVisualStyle=null };
+  editor.SetValue(TextBlock.LineHeightProperty,Scaled(25.0));
+  editor.PreviewMouseWheel+=OnFontWheel;
   editGrid.Children.Add(editor);
   previewBlocks=new StackPanel();
   previewScroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled, Background=Brushes.Transparent, Visibility=Visibility.Collapsed, FocusVisualStyle=null };
+  previewScroll.PreviewMouseWheel+=OnFontWheel;
   previewPage=new Border { Background=Brushes.Transparent, Padding=new Thickness(12,6,12,16), Child=previewBlocks, Cursor=Cursors.IBeam };
   previewPage.SetBinding(FrameworkElement.MinHeightProperty,new Binding("ViewportHeight") { Source=previewScroll });
   previewPage.MouseLeftButtonDown+=(s,e)=> { Press(-2,0,e); e.Handled=true; }; // 点在最后一行下面：在末尾接着写
@@ -196,6 +197,8 @@ partial class MainWindow : Window {
   saveStatus=new TextBlock { Text="已自动保存", Foreground=Palette.Muted, FontSize=11.5, VerticalAlignment=VerticalAlignment.Center }; status.Children.Add(saveStatus);
   var tools=new Grid(); bar.Children.Add(tools);
   toolbar=new StackPanel { Orientation=Orientation.Horizontal }; tools.Children.Add(toolbar);
+  // 字号入口放在格式栏最右边，和左边按钮之间留空；脑图有自己的底栏，不显示它。
+  fontButton=BuildFontButton(); tools.Children.Add(fontButton);
   // 预览里选中几行后，正文下方浮出一条操作条：复制、复制 Markdown、剪切、删除。
   // 浮在正文上面、不占布局：以前放在底栏里，底栏一出现正文就变矮，鼠标一下子落到了正文下边外，自动滚动把后面的行全选上了。
   selBar=new StackPanel { Orientation=Orientation.Horizontal, VerticalAlignment=VerticalAlignment.Center };

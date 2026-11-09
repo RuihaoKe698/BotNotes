@@ -26,6 +26,7 @@ partial class MainWindow {
   public double PanelW=DefW, PanelH=DefH;
   public bool HoverEnabled=true, Pinned=false;
   public int BotSize=22;
+  public int FontSize=2;
   public Color Accent=Palette.DefaultAccent, Background=Palette.DefaultBackground;
   public string ArchiveDir=null;
  }
@@ -44,6 +45,7 @@ partial class MainWindow {
    else if(k=="hoverEnabled") s.HoverEnabled=v!="0";
    else if(k=="pinned") s.Pinned=v=="1";
    else if(k=="botSize") s.BotSize=int.TryParse(v,out n) && n>=16 && n<=40?n:22;
+   else if(k=="fontSize") s.FontSize=int.TryParse(v,out n) && n>=0 && n<=4?n:2;
    else if(k=="accent") { try { s.Accent=(Color)ColorConverter.ConvertFromString(v); } catch {} }
    else if(k=="background") { try { s.Background=(Color)ColorConverter.ConvertFromString(v); } catch {} }
    else if(k=="archiveDir" && v.Length>0) s.ArchiveDir=v;
@@ -53,21 +55,21 @@ partial class MainWindow {
  }
  internal static string[] SerializeSettings(SettingsData s) {
   Func<double,string> pos=v=>double.IsNaN(v)?"":Math.Round(v,1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-  return new[] { "hoverEnabled="+(s.HoverEnabled?"1":"0"), "hoverDelayMs="+s.HoverDelayMs, "archiveDir="+(s.ArchiveDir??""), "pinned="+(s.Pinned?"1":"0"), "botSize="+s.BotSize, "accent="+Palette.ToHex(s.Accent), "background="+Palette.ToHex(s.Background),
+  return new[] { "hoverEnabled="+(s.HoverEnabled?"1":"0"), "hoverDelayMs="+s.HoverDelayMs, "archiveDir="+(s.ArchiveDir??""), "pinned="+(s.Pinned?"1":"0"), "botSize="+s.BotSize, "fontSize="+s.FontSize, "accent="+Palette.ToHex(s.Accent), "background="+Palette.ToHex(s.Background),
    "panelLeft="+pos(s.PanelLeft), "panelTop="+pos(s.PanelTop), "dotX="+pos(s.DotX), "dotY="+pos(s.DotY), "panelW="+pos(s.PanelW), "panelH="+pos(s.PanelH) };
  }
  void LoadSettings() {
   try {
    string f=Path.Combine(dir,"settings.ini"); if(!File.Exists(f)) return;
    var s=ParseSettings(File.ReadAllLines(f),dir);
-   hoverDelay=s.HoverDelayMs; panelLeft=s.PanelLeft; panelTop=s.PanelTop; dotX=s.DotX; dotY=s.DotY; prefW=s.PanelW; prefH=s.PanelH; hoverOn=s.HoverEnabled; pinned=s.Pinned; dotSize=s.BotSize; accent=s.Accent; background=s.Background; archiveDir=s.ArchiveDir;
+   hoverDelay=s.HoverDelayMs; panelLeft=s.PanelLeft; panelTop=s.PanelTop; dotX=s.DotX; dotY=s.DotY; prefW=s.PanelW; prefH=s.PanelH; hoverOn=s.HoverEnabled; pinned=s.Pinned; dotSize=s.BotSize; fontStep=s.FontSize; accent=s.Accent; background=s.Background; archiveDir=s.ArchiveDir;
   } catch {}
  }
  void SaveSettings() {
   try {
    double panelLeft=this.panelLeft, panelTop=this.panelTop, dotX=this.dotX, dotY=this.dotY; // 全屏时记的是全屏前的位置
    if(fullscreen && beforeFull!=null) { panelLeft=beforeFull[0]; panelTop=beforeFull[1]; dotX=beforeFull[4]; dotY=beforeFull[5]; }
-   var s=new SettingsData { HoverEnabled=hoverOn, HoverDelayMs=hoverDelay, ArchiveDir=archiveDir, Pinned=pinned, BotSize=dotSize, Accent=accent, Background=background, PanelLeft=panelLeft, PanelTop=panelTop, DotX=dotX, DotY=dotY, PanelW=prefW, PanelH=prefH };
+   var s=new SettingsData { HoverEnabled=hoverOn, HoverDelayMs=hoverDelay, ArchiveDir=archiveDir, Pinned=pinned, BotSize=dotSize, FontSize=fontStep, Accent=accent, Background=background, PanelLeft=panelLeft, PanelTop=panelTop, DotX=dotX, DotY=dotY, PanelW=prefW, PanelH=prefH };
    var text=SerializeSettings(s);
    string target=Path.Combine(dir,"settings.ini"), temp=Path.Combine(dir,"settings.tmp");
    File.WriteAllLines(temp,text,System.Text.Encoding.UTF8); if(File.Exists(target)) File.Replace(temp,target,null); else File.Move(temp,target);

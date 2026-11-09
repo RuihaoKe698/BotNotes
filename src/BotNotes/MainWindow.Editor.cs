@@ -81,7 +81,7 @@ partial class MainWindow {
   Choose(editTab,!on); Choose(previewTab,on); UpdateToolbar();
   if(!on && expanded) editor.Focus();
  }
- void UpdateToolbar() { toolbar.Visibility=(Writing || (previewing && editingBlock>=0))?Visibility.Visible:Visibility.Collapsed; mapBar.Visibility=mapping?Visibility.Visible:Visibility.Collapsed; UpdatePresenting(); }
+ void UpdateToolbar() { toolbar.Visibility=(Writing || (previewing && editingBlock>=0))?Visibility.Visible:Visibility.Collapsed; mapBar.Visibility=mapping?Visibility.Visible:Visibility.Collapsed; UpdateFontEntry(); UpdatePresenting(); }
  void LoadLines() {
   string text=editor.Text; eol=text.Contains("\r\n")?"\r\n":"\n";
   lines.Clear(); lines.AddRange(text.Replace("\r\n","\n").Replace('\r','\n').Split('\n'));
