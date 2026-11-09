@@ -249,6 +249,7 @@ partial class MainWindow {
    foreach(string name in noteFiles) if(!ordered.Contains(name,StringComparer.OrdinalIgnoreCase)) ordered.Add(name);
 
    var map=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+   var pathMoves=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
    foreach(string name in ordered) {
     string source=Path.Combine(dataDir,name);
     string text, error=ReadTextFile(source,out text,out var encoding,out var bom);
@@ -264,7 +265,7 @@ partial class MainWindow {
     } catch(Exception ex) {
      result.Failures.Add(source+"："+ex.Message); map[name]=source; result.TabPaths.Add(source); continue;
     }
-    map[name]=dest; result.TabPaths.Add(dest);
+    map[name]=dest; result.TabPaths.Add(dest); pathMoves[source]=dest;
    }
 
    // 默认归档文件夹里的文件原样搬到保存位置；自定义归档位置就是保存位置时不用动。
@@ -275,6 +276,7 @@ partial class MainWindow {
       string name=Path.GetFileName(file);
       string dest=UniqueFile(saveDir,name);
       File.Move(file,dest);
+      pathMoves[file]=dest;
      } catch(Exception ex) { result.Failures.Add(file+"："+ex.Message); }
     }
     try { if(Directory.GetFileSystemEntries(archive).Length==0) Directory.Delete(archive); } catch {}
@@ -297,6 +299,7 @@ partial class MainWindow {
     }
     SaveFoldFile(dataDir,output);
    }
+   RewriteHistoryPaths(dataDir,pathMoves);
    WriteStorageMarker(dataDir);
    return result;
   } catch(Exception ex) {

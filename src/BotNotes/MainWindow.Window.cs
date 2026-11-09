@@ -255,10 +255,11 @@ partial class MainWindow {
  // 收起：面板连同内容收回刘海背后（300ms，起步慢、中间快、最后柔和收住）；内容和阴影在前段同时淡出，不再有“先消失再缩”的停顿。
  void Collapse() {
   if(!expanded) return;
+  CloseHistory();
   if(fullscreen) SetFullscreen(false); // 收起前先回到原来的大小，小圆点才在原位置
   HideConfirm();
   if(editingBlock>=0) { FinishEdit(); RenderPreview(); }
-  if(!loading) {timer.Stop(); if(!SaveNote()) return; RenameCurrentAtOpportunity();}
+  if(!loading) {timer.Stop(); if(!SaveNote()) return; RenameCurrentAtOpportunity(); SnapshotCurrentNote();}
   bool changed=expandedText!=null && editor.Text!=expandedText; expandedText=null;
   expanded=false; transient=false; leaveTimer.Stop(); hoverTimer.Stop(); if(settingsOpen) PreviewBreathe();
   int gen=++animGen;
@@ -385,7 +386,7 @@ partial class MainWindow {
    if(confirmOpen) return;
    if(!Ask("当前内容没能保存。如果需要，请先把要保留的文字复制出来。","放弃未保存的更改并退出？","放弃并退出",true)) return;
   }
-  RenameAllAtOpportunity(); SaveTabOrder(); SaveFolds();
+  RenameAllAtOpportunity(); SnapshotCurrentNote(); SaveTabOrder(); SaveFolds();
   SetThreadExecutionState(ES_CONTINUOUS); tray.Visible=false; tray.Dispose(); quitting=true; Close(); Application.Current.Shutdown();
  }
 }

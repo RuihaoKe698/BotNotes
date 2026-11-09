@@ -27,6 +27,11 @@ partial class MainWindow {
    if(key==Key.Enter) { if(confirmPrimaryBtn!=null) confirmPrimaryBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); e.Handled=true; return; }
    return;
   }
+  // 历史版本面板打开时，全局快捷键不再生效；Esc 关闭，其余按键交给面板里的控件（预览可选中复制）。
+  if(historyOpen) {
+   if(key==Key.Escape) { CloseHistory(); e.Handled=true; }
+   return;
+  }
   if(key==Key.F5 && expanded && mapping && !settingsOpen) { TogglePresentation(); e.Handled=true; return; }
   if(key==Key.F11 && expanded) { SetFullscreen(!fullscreen); e.Handled=true; return; }
   if(key==Key.Escape) {
@@ -75,7 +80,7 @@ partial class MainWindow {
  }
  // Ctrl+滚轮：只接在编辑区和预览上；脑图自己的滚轮缩放不受影响。到头时也吃掉滚轮，免得正文跟着滚动。
  void OnFontWheel(object sender,MouseWheelEventArgs e) {
-  if(!expanded || mapping || settingsOpen || confirmOpen) return;
+  if(!expanded || mapping || settingsOpen || historyOpen || confirmOpen) return;
   if((Keyboard.Modifiers&ModifierKeys.Control)==0 || e.Delta==0) return;
   StepFont(e.Delta>0?1:-1); e.Handled=true;
  }

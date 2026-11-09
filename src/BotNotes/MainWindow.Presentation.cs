@@ -20,7 +20,7 @@ namespace NotchNotesWindows {
 partial class MainWindow {
  void UnfoldPresentation(MapNode n) { n.Folded=false; foreach(var k in n.Kids) UnfoldPresentation(k); }
  void TogglePresentation() { if(Presenting) ExitPresentation(); else if(mapping && mapRoot!=null) EnterPresentation(); }
- void EnterPresentation() { if(!mapping || mapRoot==null || Presenting) return; if(mapBox!=null) EndMapEdit(true); presentationWasFull=fullscreen; if(!fullscreen) SetFullscreen(true); presenting=true; presentCount=1; RenderMap(false); UpdatePresenting(); mapMoved=false; Dispatcher.BeginInvoke(new Action(()=> { if(Presenting) FitMap(); }),DispatcherPriority.Loaded); mapView.Focus(); }
+ void EnterPresentation() { CloseHistory(); if(!mapping || mapRoot==null || Presenting) return; if(mapBox!=null) EndMapEdit(true); presentationWasFull=fullscreen; if(!fullscreen) SetFullscreen(true); presenting=true; presentCount=1; RenderMap(false); UpdatePresenting(); mapMoved=false; Dispatcher.BeginInvoke(new Action(()=> { if(Presenting) FitMap(); }),DispatcherPriority.Loaded); mapView.Focus(); }
  void ExitPresentation() { if(!presenting) return; bool keep=presentationWasFull; presenting=false; if(!keep && fullscreen) SetFullscreen(false); UpdatePresenting(); if(mapping) { RenderMap(false); mapMoved=false; Dispatcher.BeginInvoke(new Action(FitMap),DispatcherPriority.Loaded); } }
  void ShowPresentation(int animateIndex,bool pan) {
   if(!Presenting) return;

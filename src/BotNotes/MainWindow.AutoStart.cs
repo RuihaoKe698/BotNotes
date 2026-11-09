@@ -48,7 +48,7 @@ partial class MainWindow {
   if(!AutoStartOn()) return;
   try { using(var k=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey,true)) { if(k==null) return; var v=k.GetValue(RunName) as string; if(v!=null && AutoStartPathChanged(v,RunCommand())) k.SetValue(RunName,RunCommand()); } } catch {}
  }
- void OpenSettings() { if(editingBlock>=0) { FinishEdit(); RenderPreview(); } settingsOpen=true; UpdateSettingsView(); settingsView.Visibility=Visibility.Visible; PreviewBreathe(); settingsButton.Background=Palette.Raised; settingsButton.Foreground=Palette.Text; }
+ void OpenSettings() { CloseHistory(); if(editingBlock>=0) { FinishEdit(); RenderPreview(); } settingsOpen=true; UpdateSettingsView(); settingsView.Visibility=Visibility.Visible; PreviewBreathe(); settingsButton.Background=Palette.Raised; settingsButton.Foreground=Palette.Text; }
  void CloseSettings() { if(!settingsOpen) return; settingsOpen=false; PreviewBreathe(); settingsView.Visibility=Visibility.Collapsed; settingsButton.Background=Brushes.Transparent; settingsButton.Foreground=Palette.Muted; if(expanded && Writing) editor.Focus(); }
  void PickSaveDir() {
   modal++;

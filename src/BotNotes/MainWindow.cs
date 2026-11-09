@@ -240,6 +240,7 @@ partial class MainWindow : Window {
 
   // 设置面板盖在标签、编辑区和暂存区上方。
   settingsView=BuildSettings(); Grid.SetRow(settingsView,1); Grid.SetRowSpan(settingsView,4); panel.Children.Add(settingsView);
+  historyView=BuildHistoryView(); Grid.SetRow(historyView,1); Grid.SetRowSpan(historyView,4); panel.Children.Add(historyView);
   confirmView=BuildConfirmCard(); Grid.SetRow(confirmView,1); Grid.SetRowSpan(confirmView,4); panel.Children.Add(confirmView);
   BuildResizeGrips(root);
 
@@ -255,7 +256,7 @@ partial class MainWindow : Window {
   leaveTimer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(450) }; leaveTimer.Tick+=(s,e)=> { leaveTimer.Stop(); if(expanded && transient && !pinned && !dragInside && !IsMouseOver) Collapse(); };
 
   try { string f=Path.Combine(dir,"shelf.txt"); if(File.Exists(f)) foreach(var line in File.ReadAllLines(f)) try {files.Add(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(line)));} catch {} } catch(Exception ex) { shelfReadable=false; Msg("暂存区读取失败，自动保存已停用以保护原文件："+ex.Message); }
-  LoadFolds(); LoadInitialTabs();
+  LoadFolds(); LoadInitialTabs(); CleanupHistoryAll(dir,DateTime.Now);
   loading=false; RefreshShelf(); RefreshTabs(); SetPreview(false);
 
   tray=new Forms.NotifyIcon { Text="BotNotes", Icon=LoadAppIcon(), Visible=true };

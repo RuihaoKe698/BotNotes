@@ -34,7 +34,7 @@ partial class MainWindow {
    foreach(var name in OldDataNames) {
     string old=AppData(name); if(!Directory.Exists(old) || EmptyOrMissing(old)) continue;
     if(Directory.Exists(now) && EmptyOrMissing(now)) Directory.Delete(now); // 新文件夹是空的（没真正用过）就当不存在
-    if(!Directory.Exists(now)) Directory.Move(old,now);
+    if(!Directory.Exists(now)) { Directory.Move(old,now); RewriteHistoryPathPrefix(now,old,now); }
     break; // 只搬最近的那一个
    }
   } catch {}
