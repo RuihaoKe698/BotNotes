@@ -28,10 +28,11 @@ partial class MainWindow {
   public int BotSize=22;
   public int FontSize=2;
   public Color Accent=Palette.DefaultAccent, Background=Palette.DefaultBackground;
-  public string ArchiveDir=null;
+  public string SaveDir=null;
+  public int StorageVersion=0;
  }
  internal static SettingsData ParseSettings(string[] rawLines,string dataDir) {
-  var s=new SettingsData();
+  var s=new SettingsData(); string legacyArchive=null;
   foreach(var raw in rawLines) {
    int i=raw.IndexOf('='); if(i<=0) continue; string k=raw.Substring(0,i).Trim(), v=raw.Substring(i+1).Trim(); int n; double d;
    bool num=double.TryParse(v,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out d) && !double.IsInfinity(d);
@@ -48,39 +49,45 @@ partial class MainWindow {
    else if(k=="fontSize") s.FontSize=int.TryParse(v,out n) && n>=0 && n<=4?n:2;
    else if(k=="accent") { try { s.Accent=(Color)ColorConverter.ConvertFromString(v); } catch {} }
    else if(k=="background") { try { s.Background=(Color)ColorConverter.ConvertFromString(v); } catch {} }
-   else if(k=="archiveDir" && v.Length>0) s.ArchiveDir=v;
+   else if(k=="saveDir" && v.Length>0) s.SaveDir=v;
+   else if(k=="archiveDir" && v.Length>0) legacyArchive=v;
+   else if(k=="storage" && int.TryParse(v,out n)) s.StorageVersion=n;
   }
-  s.ArchiveDir=RewriteArchiveDir(s.ArchiveDir,dataDir);
+  // 没有 saveDir 时沿用旧的 archiveDir（用户自定义过归档位置）；否则由 SaveDir() 给默认值。
+  if(s.SaveDir==null && legacyArchive!=null) s.SaveDir=legacyArchive;
+  s.SaveDir=RewriteArchiveDir(s.SaveDir,dataDir);
   return s;
  }
  internal static string[] SerializeSettings(SettingsData s) {
   Func<double,string> pos=v=>double.IsNaN(v)?"":Math.Round(v,1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-  return new[] { "hoverEnabled="+(s.HoverEnabled?"1":"0"), "hoverDelayMs="+s.HoverDelayMs, "archiveDir="+(s.ArchiveDir??""), "pinned="+(s.Pinned?"1":"0"), "botSize="+s.BotSize, "fontSize="+s.FontSize, "accent="+Palette.ToHex(s.Accent), "background="+Palette.ToHex(s.Background),
+  var list=new System.Collections.Generic.List<string> { "hoverEnabled="+(s.HoverEnabled?"1":"0"), "hoverDelayMs="+s.HoverDelayMs, "saveDir="+(s.SaveDir??""), "pinned="+(s.Pinned?"1":"0"), "botSize="+s.BotSize, "fontSize="+s.FontSize, "accent="+Palette.ToHex(s.Accent), "background="+Palette.ToHex(s.Background),
    "panelLeft="+pos(s.PanelLeft), "panelTop="+pos(s.PanelTop), "dotX="+pos(s.DotX), "dotY="+pos(s.DotY), "panelW="+pos(s.PanelW), "panelH="+pos(s.PanelH) };
+  if(s.StorageVersion>=2) list.Add("storage=2");
+  return list.ToArray();
  }
  void LoadSettings() {
   try {
    string f=Path.Combine(dir,"settings.ini"); if(!File.Exists(f)) return;
    var s=ParseSettings(File.ReadAllLines(f),dir);
-   hoverDelay=s.HoverDelayMs; panelLeft=s.PanelLeft; panelTop=s.PanelTop; dotX=s.DotX; dotY=s.DotY; prefW=s.PanelW; prefH=s.PanelH; hoverOn=s.HoverEnabled; pinned=s.Pinned; dotSize=s.BotSize; fontStep=s.FontSize; accent=s.Accent; background=s.Background; archiveDir=s.ArchiveDir;
+   hoverDelay=s.HoverDelayMs; panelLeft=s.PanelLeft; panelTop=s.PanelTop; dotX=s.DotX; dotY=s.DotY; prefW=s.PanelW; prefH=s.PanelH; hoverOn=s.HoverEnabled; pinned=s.Pinned; dotSize=s.BotSize; fontStep=s.FontSize; accent=s.Accent; background=s.Background; saveDir=s.SaveDir; storageVersion=s.StorageVersion;
   } catch {}
  }
  void SaveSettings() {
   try {
    double panelLeft=this.panelLeft, panelTop=this.panelTop, dotX=this.dotX, dotY=this.dotY; // 全屏时记的是全屏前的位置
    if(fullscreen && beforeFull!=null) { panelLeft=beforeFull[0]; panelTop=beforeFull[1]; dotX=beforeFull[4]; dotY=beforeFull[5]; }
-   var s=new SettingsData { HoverEnabled=hoverOn, HoverDelayMs=hoverDelay, ArchiveDir=archiveDir, Pinned=pinned, BotSize=dotSize, FontSize=fontStep, Accent=accent, Background=background, PanelLeft=panelLeft, PanelTop=panelTop, DotX=dotX, DotY=dotY, PanelW=prefW, PanelH=prefH };
+   var s=new SettingsData { HoverEnabled=hoverOn, HoverDelayMs=hoverDelay, SaveDir=saveDir, StorageVersion=storageVersion, Pinned=pinned, BotSize=dotSize, FontSize=fontStep, Accent=accent, Background=background, PanelLeft=panelLeft, PanelTop=panelTop, DotX=dotX, DotY=dotY, PanelW=prefW, PanelH=prefH };
    var text=SerializeSettings(s);
    string target=Path.Combine(dir,"settings.ini"), temp=Path.Combine(dir,"settings.tmp");
    File.WriteAllLines(temp,text,System.Text.Encoding.UTF8); if(File.Exists(target)) File.Replace(temp,target,null); else File.Move(temp,target);
   } catch(Exception ex) { Msg("设置保存失败："+ex.Message); }
  }
- string ArchiveDir() { return string.IsNullOrEmpty(archiveDir)?Path.Combine(dir,"archive"):archiveDir; }
+ string SaveDir() { return string.IsNullOrEmpty(saveDir)?DefaultSaveDir():saveDir; }
  static bool SamePath(string a,string b) { try { return string.Equals(Path.GetFullPath(a).TrimEnd('\\','/'),Path.GetFullPath(b).TrimEnd('\\','/'),StringComparison.OrdinalIgnoreCase); } catch { return false; } }
  static StackPanel Section(string title,string hint) {
   var s=new StackPanel { Margin=new Thickness(0,0,0,22) };
   s.Children.Add(new TextBlock { Text=title, Foreground=Palette.Text, FontSize=13.5, FontWeight=FontWeights.SemiBold });
-  s.Children.Add(new TextBlock { Text=hint, Foreground=Palette.Muted, FontSize=12, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,3,0,10), LineHeight=19 });
+  if(!string.IsNullOrEmpty(hint)) s.Children.Add(new TextBlock { Text=hint, Foreground=Palette.Muted, FontSize=12, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,3,0,10), LineHeight=19 });
   return s;
  }
  static Button Secondary(object content,string tip) { var b=Ui.Button(content,tip); b.Background=Palette.Raised; b.Margin=new Thickness(0,0,6,0); return b; }
@@ -166,14 +173,15 @@ partial class MainWindow {
   sizeRow.Children.Add(dotSizeSlider); sizeRow.Children.Add(dotSizeText); theme.Children.Add(sizeLine); PreviewBreathe();
   list.Children.Add(theme);
 
-  var arch=Section("归档位置","关闭笔记时选“归档”，笔记会移到这个文件夹；需要时用“打开”取回。更改位置后，之前已归档的笔记留在原处，不会跟着移动。");
-  var pathBox=new Border { Background=Palette.Panel, BorderBrush=Palette.Line, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(7), Padding=new Thickness(10,7,10,7), Margin=new Thickness(0,0,0,8) };
-  archivePathText=new TextBlock { Foreground=Palette.Text, FontSize=12.5, TextTrimming=TextTrimming.CharacterEllipsis }; pathBox.Child=archivePathText; arch.Children.Add(pathBox);
-  var archRow=new StackPanel { Orientation=Orientation.Horizontal };
-  var change=Secondary(Ui.IconLabel(G_Folder,"更改…"),"选择新的归档文件夹"); change.Click+=(s,e)=>PickArchive(); archRow.Children.Add(change);
-  var open=Secondary("打开文件夹","在资源管理器中打开"); open.Click+=(s,e)=>OpenArchive(); archRow.Children.Add(open);
-  resetArchiveBtn=Ui.Button("恢复默认","改回笔记文件夹里的 archive"); resetArchiveBtn.Foreground=Palette.Muted; resetArchiveBtn.Click+=(s,e)=> { archiveDir=null; SaveSettings(); UpdateSettingsView(); }; archRow.Children.Add(resetArchiveBtn);
-  arch.Children.Add(archRow); list.Children.Add(arch);
+  var save=Section("保存位置",null);
+  var pathBox=new Border { Background=Palette.Panel, BorderBrush=Palette.Line, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(7), Padding=new Thickness(10,7,10,7), Margin=new Thickness(0,8,0,8) };
+  savePathText=new TextBlock { Foreground=Palette.Text, FontSize=12.5, TextTrimming=TextTrimming.CharacterEllipsis }; pathBox.Child=savePathText; save.Children.Add(pathBox);
+  save.Children.Add(new TextBlock { Text="新建的笔记存在这里；已有的文件不会移动。", Foreground=Palette.Muted, FontSize=12, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,0,0,10), LineHeight=19 });
+  var saveRow=new StackPanel { Orientation=Orientation.Horizontal };
+  var change=Secondary(Ui.IconLabel(G_Folder,"更改…"),"选择新的保存文件夹"); change.Click+=(s,e)=>PickSaveDir(); saveRow.Children.Add(change);
+  var open=Secondary("打开文件夹","在资源管理器中打开"); open.Click+=(s,e)=>OpenSaveDir(); saveRow.Children.Add(open);
+  resetSaveBtn=Ui.Button("恢复默认","改回“文档\\BotNotes”"); resetSaveBtn.Foreground=Palette.Muted; resetSaveBtn.Click+=(s,e)=> { saveDir=null; SaveSettings(); UpdateSettingsView(); }; saveRow.Children.Add(resetSaveBtn);
+  save.Children.Add(saveRow); list.Children.Add(save);
   return view;
  }
  static string PresetName(string[][] list,Color c) { foreach(var p in list) if((Color)ColorConverter.ConvertFromString(p[0])==c) return p[1]; return "自定义"; }
@@ -233,7 +241,7 @@ partial class MainWindow {
   Choose(hoverOnBtn,hoverOn); Choose(hoverOffBtn,!hoverOn);
   hoverValue.Text=hoverDelay==0?"立即":(hoverDelay/1000.0).ToString("0.0")+" 秒"; hoverValue.Opacity=hoverOn?1:0.4;
   minusBtn.IsEnabled=hoverOn && hoverDelay>0; plusBtn.IsEnabled=hoverOn && hoverDelay<3000;
-  string a=ArchiveDir(); archivePathText.Text=a; archivePathText.ToolTip=a; resetArchiveBtn.IsEnabled=!string.IsNullOrEmpty(archiveDir);
+  string a=SaveDir(); savePathText.Text=a; savePathText.ToolTip=a; resetSaveBtn.IsEnabled=!string.IsNullOrEmpty(saveDir);
   resetPlaceBtn.IsEnabled=!AtHome(); resetSizeBtn.IsEnabled=!DefaultSize();
   bool autoOn=AutoStartOn(); Choose(autoOnBtn,autoOn); Choose(autoOffBtn,!autoOn);
  }

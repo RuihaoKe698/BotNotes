@@ -34,7 +34,8 @@ namespace BotNotes.Tests
      FontSize = 4,
      Accent = Color.FromRgb(0x9C, 0xC7, 0xF5),
      Background = Color.FromRgb(0x1C, 0x1D, 0x21),
-     ArchiveDir = Path.Combine(sb.Root, "custom-archive")
+     SaveDir = Path.Combine(sb.Root, "custom-notes"),
+     StorageVersion = 2
     };
 
     string file = Path.Combine(sb.Root, "settings.ini");
@@ -54,7 +55,8 @@ namespace BotNotes.Tests
     Assert.Equal(saved.FontSize, loaded.FontSize);
     Assert.Equal(saved.Accent, loaded.Accent);
     Assert.Equal(saved.Background, loaded.Background);
-    Assert.Equal(saved.ArchiveDir, loaded.ArchiveDir);
+    Assert.Equal(saved.SaveDir, loaded.SaveDir);
+    Assert.Equal(2, loaded.StorageVersion);
    }
   }
 
@@ -77,7 +79,54 @@ namespace BotNotes.Tests
    Assert.Equal(d.FontSize, s.FontSize);
    Assert.Equal(d.Accent, s.Accent);
    Assert.Equal(d.Background, s.Background);
-   Assert.Null(s.ArchiveDir);
+   Assert.Null(s.SaveDir);
+   Assert.Equal(0, s.StorageVersion);
+  }
+
+  [Fact]
+  public void SaveDir_UsesNewKey_AndFallsBackToLegacyArchiveDir()
+  {
+   using (var sb = new Sandbox())
+   {
+    string legacy = Path.Combine(sb.Root, "old-archive");
+    string current = Path.Combine(sb.Root, "new-save");
+
+    Assert.Equal(legacy, Parse("archiveDir=" + legacy).SaveDir);
+    Assert.Equal(current, Parse("archiveDir=" + legacy, "saveDir=" + current).SaveDir);
+    Assert.Equal(legacy, Parse("saveDir=", "archiveDir=" + legacy).SaveDir);
+    Assert.Null(Parse("saveDir=", "archiveDir=").SaveDir);
+    Assert.Null(Parse().SaveDir);
+   }
+  }
+
+  [Fact]
+  public void DefaultSaveDir_IsBotNotesUnderDocuments()
+  {
+   using (var sb = new Sandbox())
+   {
+    Assert.Equal(Path.Combine(sb.DocumentsDir, "BotNotes"), MainWindow.DefaultSaveDir());
+   }
+  }
+
+  [Fact]
+  public void LegacyArchiveDirUnderOldDataFolder_IsRewrittenToNewDataFolder()
+  {
+   using (var sb = new Sandbox())
+   {
+    string oldArchive = Path.Combine(sb.DotNotesDir, "archive");
+    var s = MainWindow.ParseSettings(new[] { "archiveDir=" + oldArchive }, sb.BotNotesDir);
+
+    Assert.Equal(Path.Combine(sb.BotNotesDir, "archive"), s.SaveDir);
+   }
+  }
+
+  [Fact]
+  public void StorageVersionTwo_IsSerializedAndReadBack()
+  {
+   var lines = MainWindow.SerializeSettings(new MainWindow.SettingsData { StorageVersion = 2 });
+   Assert.Contains("storage=2", lines);
+   Assert.Equal(2, Parse(lines).StorageVersion);
+   Assert.DoesNotContain("storage=2", MainWindow.SerializeSettings(new MainWindow.SettingsData()));
   }
 
   [Fact]
@@ -112,7 +161,8 @@ namespace BotNotes.Tests
     "botSize=abc",
     "accent=not-a-color",
     "background=#12",
-    "archiveDir=");
+    "saveDir=",
+    "storage=abc");
    var d = new MainWindow.SettingsData();
 
    Assert.Equal(d.PanelLeft, s.PanelLeft);
@@ -122,7 +172,8 @@ namespace BotNotes.Tests
    Assert.Equal(d.FontSize, s.FontSize);
    Assert.Equal(d.Accent, s.Accent);
    Assert.Equal(d.Background, s.Background);
-   Assert.Null(s.ArchiveDir);
+   Assert.Null(s.SaveDir);
+   Assert.Equal(0, s.StorageVersion);
   }
 
   [Fact]

@@ -16,8 +16,11 @@ namespace BotNotes.Tests
   public string BotNotesDir { get { return Path.Combine(Root, "BotNotes"); } }
   public string DotNotesDir { get { return Path.Combine(Root, "DotNotes"); } }
   public string NotchNotesWindowsDir { get { return Path.Combine(Root, "NotchNotesWindows"); } }
+  public string DocumentsDir { get { return Path.Combine(Root, "Documents"); } }
+  public string SaveDir { get { return Path.Combine(DocumentsDir, "BotNotes"); } }
 
   readonly string oldLocalRoot = MainWindow.LocalRoot;
+  readonly string oldDocumentsRoot = MainWindow.DocumentsRoot;
   readonly string oldRunKey = MainWindow.RunKey;
   readonly string oldApprovedKey = MainWindow.ApprovedKey;
 
@@ -26,6 +29,7 @@ namespace BotNotes.Tests
    Root = Path.Combine(Path.GetTempPath(), "BotNotesTests", Guid.NewGuid().ToString("N"));
    Directory.CreateDirectory(Root);
    MainWindow.LocalRoot = Root;
+   MainWindow.DocumentsRoot = DocumentsDir;
    RegRoot = @"Software\BotNotesTests\" + Guid.NewGuid().ToString("N");
    MainWindow.RunKey = RegRoot + @"\Run";
    MainWindow.ApprovedKey = RegRoot + @"\StartupApproved\Run";
@@ -42,6 +46,7 @@ namespace BotNotes.Tests
   public void Dispose()
   {
    MainWindow.LocalRoot = oldLocalRoot;
+   MainWindow.DocumentsRoot = oldDocumentsRoot;
    MainWindow.RunKey = oldRunKey;
    MainWindow.ApprovedKey = oldApprovedKey;
    try { if (Directory.Exists(Root)) Directory.Delete(Root, true); } catch { }

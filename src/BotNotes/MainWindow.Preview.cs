@@ -251,14 +251,13 @@ partial class MainWindow {
  void LoadFolds() {
   try {
    string f=Path.Combine(dir,"folds.txt"); if(!File.Exists(f)) return;
-   foreach(var raw in File.ReadAllLines(f)) { int t=raw.IndexOf('\t'); if(t<=0) continue; try { FoldsOf(raw.Substring(0,t),true).Add(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(raw.Substring(t+1)))); } catch {} }
+   foreach(var pair in ParseFoldLines(File.ReadAllLines(f),dir)) FoldsOf(pair.Key,true).Add(pair.Value);
   } catch {}
  }
  void SaveFolds() {
   try {
-   var list=new List<string>(); foreach(var pair in folds) foreach(var k in pair.Value) list.Add(pair.Key+"\t"+Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(k)));
-   string target=Path.Combine(dir,"folds.txt"), temp=Path.Combine(dir,"folds.tmp");
-   File.WriteAllLines(temp,list.ToArray()); if(File.Exists(target)) File.Replace(temp,target,null); else File.Move(temp,target);
+   var list=new List<KeyValuePair<string,string>>(); foreach(var pair in folds) foreach(var k in pair.Value) list.Add(new KeyValuePair<string,string>(pair.Key,k));
+   SaveFoldFile(dir,list);
   } catch {} // 折叠状态丢了不影响笔记本身，不打扰用户
  }
  FrameworkElement Placeholder() {

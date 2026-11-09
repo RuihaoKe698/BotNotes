@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -18,24 +19,34 @@ using D = System.Drawing;
 
 namespace NotchNotesWindows {
 partial class MainWindow {
- // ——— 笔记 ———
- string GetNoteTitle(string name) { string title=""; try { string content=name==currentNote?editor.Text:File.ReadAllText(Path.Combine(dir,name)); foreach(string line in content.Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries)) { title=Regex.Replace(line.Trim(),@"^#{1,6}\s*","").Trim(); if(title.Length>0) break; } } catch {} if(title.Length==0) title=name=="note.md"?"未命名笔记":"未命名 "+name.Substring(5,name.Length-8); if(title.Length>12) title=title.Substring(0,12)+"…"; return title; }
+ // ——— 标签 ———
+ string NoteTextOf(string path) {
+  if(path==currentNote) return editor.Text;
+  NoteFileState st;
+  if(noteStates.TryGetValue(path,out st)) return st.LastSavedText;
+  try { string text, error=ReadTextFile(path,out text,out var encoding,out var bom); if(error==null) return text; } catch {}
+  return "";
+ }
+ string GetNoteTitle(string name) {
+  string title=TitleOf(name==DraftKey?"":NoteTextOf(name));
+  if(title.Length>12) title=title.Substring(0,12)+"…";
+  return title;
+ }
  void RefreshTabs() {
-  tabs.Children.Clear(); noteNames.Clear(); noteNames.Add("note.md");
-  try { foreach(var p in Directory.GetFiles(dir,"note_*.md")) noteNames.Add(Path.GetFileName(p)); } catch(Exception ex) {Msg("无法读取笔记列表："+ex.Message);}
-  noteNames.Sort(StringComparer.OrdinalIgnoreCase); ApplyTabOrder();
-  Button active=null;
-  foreach(string name in noteNames) {
-   string n=name; string title=GetNoteTitle(n); bool on=n==currentNote; if(on) currentTitle=title;
-   var label=new StackPanel { Orientation=Orientation.Horizontal }; label.Children.Add(new TextBlock { Text=title, VerticalAlignment=VerticalAlignment.Center });
-   var x=Ui.Button(Ui.Icon(G_Close,7),"关闭这篇笔记，可选择归档（Ctrl+W）"); x.Width=18; x.Height=18; x.Padding=new Thickness(0); x.Margin=new Thickness(6,0,-3,0); x.Focusable=false; x.Opacity=on?0.8:0; x.IsHitTestVisible=on;
-   x.Click+=(s,e)=> { e.Handled=true; CloseNote(n); }; label.Children.Add(x);
+  tabs.Children.Clear(); Button active=null;
+  foreach(string n in notePaths) {
+   string name=n, title=GetNoteTitle(name); bool on=name==currentNote, missing=missingNotes.Contains(name); if(on) currentTitle=title;
+   var text=new TextBlock { Text=title, VerticalAlignment=VerticalAlignment.Center };
+   if(missing) { text.Foreground=Palette.Muted; text.TextDecorations=TextDecorations.Strikethrough; }
+   var label=new StackPanel { Orientation=Orientation.Horizontal }; label.Children.Add(text);
+   var x=Ui.Button(Ui.Icon(G_Close,7),"关闭这篇笔记（Ctrl+W）"); x.Width=18; x.Height=18; x.Padding=new Thickness(0); x.Margin=new Thickness(6,0,-3,0); x.Focusable=false; x.Opacity=on?0.8:0; x.IsHitTestVisible=on;
+   x.Click+=(s,e)=> { e.Handled=true; CloseNote(name); }; label.Children.Add(x);
    var b=Ui.Button(label,"切换笔记："+title+"（Ctrl+Tab；中键点击关闭）"); b.Height=28; b.Margin=new Thickness(0,0,4,0); b.Padding=new Thickness(10,0,6,0);
    x.Foreground=on?Palette.Accent:Palette.Muted;
    b.MouseEnter+=(s,e)=> { x.Opacity=0.8; x.IsHitTestVisible=true; }; b.MouseLeave+=(s,e)=> { if(!on) { x.Opacity=0; x.IsHitTestVisible=false; } };
-   b.MouseUp+=(s,e)=> { if(e.ChangedButton==MouseButton.Middle) { e.Handled=true; CloseNote(n); } };
-   b.Background=on?Palette.AccentBg:Brushes.Transparent; b.Foreground=on?Palette.Accent:Palette.Muted; if(on) b.FontWeight=FontWeights.SemiBold;
-   b.Click+=(s,e)=> { CloseSettings(); SwitchNote(n); }; TabDrag(b,n); tabs.Children.Add(b); if(on) active=b;
+   b.MouseUp+=(s,e)=> { if(e.ChangedButton==MouseButton.Middle) { e.Handled=true; CloseNote(name); } };
+   b.Background=on?Palette.AccentBg:Brushes.Transparent; b.Foreground=missing?Palette.Muted:(on?Palette.Accent:Palette.Muted); if(on && !missing) b.FontWeight=FontWeights.SemiBold;
+   b.Click+=(s,e)=> { CloseSettings(); SwitchNote(name); }; TabDrag(b,name); tabs.Children.Add(b); if(on) active=b;
   }
   if(active!=null) { var a=active; Dispatcher.BeginInvoke(new Action(()=>a.BringIntoView()),DispatcherPriority.Loaded); }
  }
@@ -50,10 +61,9 @@ partial class MainWindow {
  void UpdateTabEdges() {
   if(tabPrev==null) return;
   // 放不放得下只看“没有箭头和分隔线时”标签能占多宽：整行减去新建、打开两个按钮。
-  // 不能用 ViewportWidth 加回箭头宽度——分隔线的 9px 没算进去，宽度正好卡在这 9px 里时箭头会一出一收来回跳。
   double room=tabRowPanel.ActualWidth-tabAdd.ActualWidth-tabAdd.Margin.Left-tabOpen.ActualWidth-tabOpen.Margin.Left;
   if(room<=0) return;
-  bool over=tabs.DesiredSize.Width>room+0.5; var v=over?Visibility.Visible:Visibility.Collapsed; // 用内容本来的宽度；ActualWidth 会被拉伸到可视宽度，还可能晚一拍
+  bool over=tabs.DesiredSize.Width>room+0.5; var v=over?Visibility.Visible:Visibility.Collapsed;
   if(tabPrev.Visibility!=v) { tabPrev.Visibility=tabNext.Visibility=tabsEdge.Visibility=v; }
   double off=tabsScroll.HorizontalOffset, max=tabsScroll.ScrollableWidth; bool left=over && off>0.5, right=over && off<max-0.5;
   tabPrev.IsEnabled=left; tabNext.IsEnabled=right;
@@ -64,60 +74,142 @@ partial class MainWindow {
   tabsScroll.OpacityMask=over?mask:null;
  }
  // ——— 拖动标签换位 ———
- // 按住标签左右拖动超过 6px 开始拖；标签跟着鼠标走，越过相邻标签的中线就和它换位，松开后记住顺序。
- // 只挪别的标签，被拖的那个一直留在原位置的可视树里，鼠标捕获不会丢；拖过之后不算点击。
  void TabDrag(Button b,string name) {
-  b.PreviewMouseLeftButtonDown+=(s,e)=> { tabDragName=name; tabDragMoved=false; tabGrab=e.GetPosition(b).X; };
+  b.PreviewMouseLeftButtonDown+=(s,e)=> { tabDragName=name; tabDragging=true; tabDragMoved=false; tabGrab=e.GetPosition(b).X; };
   b.PreviewMouseMove+=(s,e)=> {
-   if(tabDragName!=name || e.LeftButton!=MouseButtonState.Pressed) return;
+   if(!tabDragging || tabDragName!=name || e.LeftButton!=MouseButtonState.Pressed) return;
    double x=e.GetPosition(tabs).X, left=System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(b).X;
    if(!tabDragMoved) { if(Math.Abs(x-tabGrab-left)<6) return; tabDragMoved=true; b.CaptureMouse(); Panel.SetZIndex(b,1); b.RenderTransform=new TranslateTransform(); }
    int i=tabs.Children.IndexOf(b);
-   while(i+1<tabs.Children.Count && x>TabMid(i+1)) { var o=tabs.Children[i+1]; tabs.Children.RemoveAt(i+1); tabs.Children.Insert(i,o); SwapNames(i,i+1); i++; tabs.UpdateLayout(); }
-   while(i>0 && x<TabMid(i-1)) { var o=tabs.Children[i-1]; tabs.Children.RemoveAt(i-1); tabs.Children.Insert(i,o); SwapNames(i-1,i); i--; tabs.UpdateLayout(); }
+   while(i+1<tabs.Children.Count && x>TabMid(i+1)) { var o=tabs.Children[i+1]; tabs.Children.RemoveAt(i+1); tabs.Children.Insert(i,o); SwapNotes(i,i+1); i++; tabs.UpdateLayout(); }
+   while(i>0 && x<TabMid(i-1)) { var o=tabs.Children[i-1]; tabs.Children.RemoveAt(i-1); tabs.Children.Insert(i,o); SwapNotes(i-1,i); i--; tabs.UpdateLayout(); }
    left=System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(b).X;
    ((TranslateTransform)b.RenderTransform).X=Clamp(x-tabGrab-left,-left,Math.Max(0,tabs.ActualWidth-left-b.ActualWidth));
-   double v=e.GetPosition(tabsScroll).X; // 拖到标签区两头时自动滚动
+   double v=e.GetPosition(tabsScroll).X;
    if(v<24) tabsScroll.ScrollToHorizontalOffset(tabsScroll.HorizontalOffset-8); else if(v>tabsScroll.ActualWidth-24) tabsScroll.ScrollToHorizontalOffset(tabsScroll.HorizontalOffset+8);
   };
-  b.PreviewMouseLeftButtonUp+=(s,e)=> { if(tabDragName!=name) return; bool moved=tabDragMoved; tabDragName=null; if(!moved) return; e.Handled=true; EndTabDrag(b); b.ReleaseMouseCapture(); };
-  b.LostMouseCapture+=(s,e)=> { if(tabDragName==name && tabDragMoved) { tabDragName=null; EndTabDrag(b); } };
+  b.PreviewMouseLeftButtonUp+=(s,e)=> { if(!tabDragging || tabDragName!=name) return; bool moved=tabDragMoved; tabDragging=false; tabDragName=null; if(!moved) return; e.Handled=true; EndTabDrag(b); b.ReleaseMouseCapture(); };
+  b.LostMouseCapture+=(s,e)=> { if(tabDragging && tabDragName==name && tabDragMoved) { tabDragging=false; tabDragName=null; EndTabDrag(b); } };
  }
  double TabMid(int i) { var r=System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot((FrameworkElement)tabs.Children[i]); return r.X+r.Width/2; }
- void SwapNames(int a,int b) { string t=noteNames[a]; noteNames[a]=noteNames[b]; noteNames[b]=t; }
- void EndTabDrag(Button b) { b.RenderTransform=Transform.Identity; Panel.SetZIndex(b,0); tabOrder.Clear(); tabOrder.AddRange(noteNames); SaveTabOrder(); }
- void ApplyTabOrder() {
-  if(tabOrder.Count==0) return;
-  var exist=new HashSet<string>(noteNames,StringComparer.OrdinalIgnoreCase);
-  if(tabOrder.RemoveAll(n=>!exist.Contains(n))>0) SaveTabOrder(); // 关掉或删掉的笔记不留在顺序里，免得以后同名新笔记插回旧位置
-  var listed=new HashSet<string>(tabOrder,StringComparer.OrdinalIgnoreCase);
-  var rest=noteNames.FindAll(n=>!listed.Contains(n)); noteNames.Clear(); noteNames.AddRange(tabOrder); noteNames.AddRange(rest);
- }
- void LoadTabOrder() {
+ void SwapNotes(int a,int b) { string t=notePaths[a]; notePaths[a]=notePaths[b]; notePaths[b]=t; }
+ void EndTabDrag(Button b) { b.RenderTransform=Transform.Identity; Panel.SetZIndex(b,0); SaveTabOrder(); }
+ int IndexOfPath(string path) { for(int i=0;i<notePaths.Count;i++) if(SamePath(notePaths[i],path)) return i; return -1; }
+ void SaveTabOrder() { SaveOrderFile(dir,SerializeOrderPaths(notePaths)); }
+ void CycleNote(int step) { if(notePaths.Count<2) return; int i=IndexOfPath(currentNote); if(i<0) i=0; SwitchNote(notePaths[(i+step+notePaths.Count)%notePaths.Count]); }
+
+ // ——— 启动时恢复标签 ———
+ void LoadInitialTabs() {
+  notePaths.Clear(); noteStates.Clear(); missingNotes.Clear();
+  var missing=new List<string>(); var bad=new List<string>();
+  var paths=new List<string>();
   try {
-   string f=Path.Combine(dir,"order.txt"); if(!File.Exists(f)) return;
-   var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-   foreach(var raw in File.ReadAllLines(f)) { string n=raw.Trim(); if(Regex.IsMatch(n,@"^note(_\d+)?\.md$",RegexOptions.IgnoreCase) && seen.Add(n)) tabOrder.Add(n); }
+   string f=Path.Combine(dir,"order.txt");
+   if(File.Exists(f)) paths.AddRange(ParseOrderPaths(File.ReadAllLines(f),dir));
   } catch {}
+  // 迁移中止或还没有 storage=2 时，旧的 note*.md 仍按普通路径打开。
+  if(storageVersion<2) {
+   try { foreach(string name in LegacyNoteFiles(dir)) { string p=Path.GetFullPath(Path.Combine(dir,name)); bool has=false; foreach(string q in paths) if(SamePath(q,p)) {has=true;break;} if(!has) paths.Add(p); } } catch {}
+  }
+  foreach(string path in paths) {
+   if(!File.Exists(path)) { missing.Add(path); continue; }
+   string text,error=ReadTextFile(path,out text,out var encoding,out var bom);
+   if(error!=null) { bad.Add(path+"："+error); continue; }
+   var fi=new FileInfo(path);
+   noteStates[path]=new NoteFileState { Path=path, Encoding=encoding, Bom=bom, LastWriteUtc=fi.LastWriteTimeUtc, Length=fi.Length, LastSavedText=text, NamedTitle=TitleOf(text) };
+   notePaths.Add(path);
+  }
+  if(notePaths.Count==0) notePaths.Add(DraftKey);
+  currentNote=notePaths[0]; savedText="";
+  NoteFileState first;
+  if(currentNote!=DraftKey && noteStates.TryGetValue(currentNote,out first)) { editor.Text=first.LastSavedText; savedText=first.LastSavedText; }
+  else editor.Text="";
+  noteReadable=true;
+  if(missing.Count>0 || bad.Count>0) SaveTabOrder();
+  if(missing.Count>0) {
+   var copy=new List<string>(missing);
+   Dispatcher.BeginInvoke(new Action(()=>Msg("以下文件找不到了，已从标签里移除：\n"+string.Join("\n",copy.ToArray()))),DispatcherPriority.ApplicationIdle);
+  }
+  if(bad.Count>0) {
+   var copy=new List<string>(bad);
+   Dispatcher.BeginInvoke(new Action(()=>Msg("以下文件打不开，已从标签里移除：\n"+string.Join("\n",copy.ToArray()))),DispatcherPriority.ApplicationIdle);
+  }
  }
- void SaveTabOrder() {
+
+ // ——— 切换 / 新建 ———
+ void SwitchNote(string name) {
+  if(name==currentNote) return;
+  if(Presenting) ExitPresentation(); if(editingBlock>=0) FinishEdit(); timer.Stop();
+  if(!SaveNote()) return;
+  RenameCurrentAtOpportunity();
+  string text; NoteFileState st;
+  if(!LoadTabText(name,out text,out st)) return;
+  loading=true; currentNote=name; noteReadable=(name==DraftKey)||st==null||st.Readable; savedText=text; editor.Text=text; loading=false; ClearHistory();
+  RefreshTabs(); if(previewing) RenderPreview(); else if(mapping) RenderMap(true); else editor.Focus();
+  FadeIn(previewing?(UIElement)previewScroll:mapping?(UIElement)mapView:editor);
+  if(!noteReadable) SetStatus("读取失败，无法保存",Palette.Warn);
+  if(missingNotes.Contains(name)) { SetStatus("文件已被移走或删除",Palette.Warn); ShowMissingCard(name); }
+ }
+ bool LoadTabText(string path,out string text,out NoteFileState state) {
+  text=""; state=null;
+  if(path==DraftKey) return true;
+  noteStates.TryGetValue(path,out state);
+  if(File.Exists(path)) {
+   string error=ReadTextFile(path,out text,out var encoding,out var bom);
+   if(error!=null) {
+    if(state!=null) { state.Readable=false; text=state.LastSavedText; return true; }
+    Msg("无法打开笔记："+error); return false;
+   }
+   var fi=new FileInfo(path);
+   state=new NoteFileState { Path=path, Encoding=encoding, Bom=bom, LastWriteUtc=fi.LastWriteTimeUtc, Length=fi.Length, LastSavedText=text, NamedTitle=state!=null?state.NamedTitle:TitleOf(text) };
+   noteStates[path]=state; missingNotes.Remove(path); return true;
+  }
+  missingNotes.Add(path);
+  if(state==null) state=new NoteFileState { Path=path, LastSavedText="", NamedTitle=Path.GetFileNameWithoutExtension(path), Encoding=new UTF8Encoding(true), Bom=true };
+  text=state.LastSavedText;
+  return true;
+ }
+ void ShowBlankDraft() {
+  if(!notePaths.Contains(DraftKey)) notePaths.Add(DraftKey);
+  currentNote=DraftKey; currentTitle="未命名"; savedText=""; noteReadable=true; draftCreateWarned=false;
+  loading=true; editor.Text=""; loading=false; ClearHistory(); RefreshTabs(); SaveTabOrder();
+  if(previewing) RenderPreview(); else if(mapping) RenderMap(true); else if(expanded) editor.Focus();
+  SetStatus("已自动保存",Palette.Accent);
+ }
+ void NewNote() {
+  timer.Stop(); if(!SaveNote()) return; RenameCurrentAtOpportunity();
+  if(notePaths.Contains(DraftKey)) { if(currentNote!=DraftKey) SwitchNote(DraftKey); else if(expanded) editor.Focus(); }
+  else ShowBlankDraft();
+  if(mapping) SetPreview(false); else if(previewing) EditAtLine(0,0,false);
+ }
+ // 写第一个字时把空白草稿落成“未命名.md”；失败时保留草稿，下次输入再试。
+ bool EnsureDraftFile() {
+  if(currentNote!=DraftKey) return true;
   try {
-   string target=Path.Combine(dir,"order.txt"), temp=Path.Combine(dir,"order.tmp");
-   File.WriteAllLines(temp,tabOrder.ToArray()); if(File.Exists(target)) File.Replace(temp,target,null); else File.Move(temp,target);
-  } catch {} // 顺序丢了只是回到默认排序，不打扰用户
+   string folder=SaveDir(); Directory.CreateDirectory(folder);
+   string path=NewDraftPath(folder);
+   var encoding=new UTF8Encoding(true);
+   WriteTextFile(path,editor.Text,encoding,true);
+   var fi=new FileInfo(path);
+   var st=new NoteFileState { Path=path, Encoding=encoding, Bom=true, LastWriteUtc=fi.LastWriteTimeUtc, Length=fi.Length, LastSavedText=editor.Text, NamedTitle="未命名" };
+   noteStates[path]=st; missingNotes.Remove(path);
+   int i=notePaths.IndexOf(DraftKey); if(i>=0) notePaths[i]=path; else notePaths.Add(path);
+   currentNote=path; noteReadable=true; savedText=editor.Text; draftCreateWarned=false;
+   SaveTabOrder(); RefreshTabs();
+   return true;
+  } catch(Exception ex) {
+   if(!draftCreateWarned) { draftCreateWarned=true; SetStatus("新建文件失败",Palette.Warn); Msg("无法新建笔记："+ex.Message); }
+   return false;
+  }
  }
- void CycleNote(int step) { if(noteNames.Count<2) return; int i=noteNames.IndexOf(currentNote); if(i<0) i=0; SwitchNote(noteNames[(i+step+noteNames.Count)%noteNames.Count]); }
- void SwitchNote(string name) { if(name==currentNote) return; if(Presenting) ExitPresentation(); if(editingBlock>=0) FinishEdit(); timer.Stop(); if(!SaveNote()) return; string text; try { string p=Path.Combine(dir,name); text=File.Exists(p)?File.ReadAllText(p):""; } catch(Exception ex) { Msg("无法打开笔记："+ex.Message); return; } loading=true; currentNote=name; noteReadable=true; editor.Text=text; loading=false; ClearHistory(); RefreshTabs(); if(previewing) RenderPreview(); else if(mapping) RenderMap(true); else editor.Focus(); FadeIn(previewing?(UIElement)previewScroll:mapping?(UIElement)mapView:editor); }
- void NewNote() { timer.Stop(); if(!SaveNote()) return; int i=2; while(File.Exists(Path.Combine(dir,"note_"+i+".md"))) i++; string name="note_"+i+".md"; try { using(var f=new FileStream(Path.Combine(dir,name),FileMode.CreateNew)) {} } catch(Exception ex) {Msg("无法创建笔记："+ex.Message);return;} SwitchNote(name); if(mapping) SetPreview(false); else if(previewing) EditAtLine(0,0,false); }
+
  // ——— 打开文件 ———
- // 把选中文件的内容放进笔记；当前笔记是空的就直接填进去，免得多出一篇空白标签。
- // 归档文件夹里的文件算“取回”：放回笔记后，归档里那份移到回收站，同一篇不会存两份。其他位置的文件只复制，原文件不动。
  void OpenFiles() {
   string[] picked;
   modal++;
   try {
-   using(var d=new Forms.OpenFileDialog { Title="打开文件或取回归档的笔记", Multiselect=true, Filter="Markdown 和文本 (*.md;*.markdown;*.txt)|*.md;*.markdown;*.txt|所有文件 (*.*)|*.*" }) {
-    try { if(Directory.Exists(ArchiveDir())) d.InitialDirectory=ArchiveDir(); } catch {}
+   using(var d=new Forms.OpenFileDialog { Title="打开文件", Multiselect=true, Filter="Markdown 和文本 (*.md;*.markdown;*.txt)|*.md;*.markdown;*.txt|所有文件 (*.*)|*.*" }) {
+    try { string s=SaveDir(); Directory.CreateDirectory(s); d.InitialDirectory=s; } catch {}
     if(d.ShowDialog(new Win32Owner(new System.Windows.Interop.WindowInteropHelper(this).Handle))!=Forms.DialogResult.OK) return;
     picked=d.FileNames;
    }
@@ -125,127 +217,239 @@ partial class MainWindow {
   OpenPaths(picked);
  }
  void OpenPaths(string[] picked) {
-  if(editingBlock>=0) FinishEdit(); timer.Stop(); if(!SaveNote()) return;
-  string last=null; var skipped=new List<string>();
-  foreach(string path in picked) {
-   string text, why=ReadTextFile(path,out text); if(why!=null) { skipped.Add(Path.GetFileName(path)+"："+why); continue; }
-   string name;
-   if(last==null && editor.Text.Trim().Length==0) name=currentNote;
-   else { int i=2; while(File.Exists(Path.Combine(dir,"note_"+i+".md"))) i++; name="note_"+i+".md"; }
-   try { File.WriteAllText(Path.Combine(dir,name),text,System.Text.Encoding.UTF8); } catch(Exception ex) { skipped.Add(Path.GetFileName(path)+"："+ex.Message); continue; }
-   if(name==currentNote) { loading=true; editor.Text=text; loading=false; ClearHistory(); }
-   last=name;
-   if(InArchive(path)) try { Discard(path); } catch(Exception ex) { skipped.Add(Path.GetFileName(path)+"：已取回，但归档里的原文件没能移走（"+ex.Message+"）"); }
+  if(editingBlock>=0) FinishEdit(); timer.Stop(); if(!SaveNote()) return; RenameCurrentAtOpportunity();
+  string last=null; var skipped=new List<string>(); bool blankDraft=currentNote==DraftKey && editor.Text.Trim().Length==0;
+  foreach(string raw in picked??new string[0]) {
+   string path; try { path=Path.GetFullPath(raw); } catch { continue; }
+   if(IndexOfPath(path)>=0) { last=path; continue; }
+   string text, error=ReadTextFile(path,out text,out var encoding,out var bom);
+   if(error!=null) { skipped.Add(Path.GetFileName(path)+"："+error); continue; }
+   var fi=new FileInfo(path);
+   var st=new NoteFileState { Path=path, Encoding=encoding, Bom=bom, LastWriteUtc=fi.LastWriteTimeUtc, Length=fi.Length, LastSavedText=text, NamedTitle=TitleOf(text) };
+   noteStates[path]=st; missingNotes.Remove(path);
+   if(blankDraft && currentNote==DraftKey) {
+    int i=notePaths.IndexOf(DraftKey); if(i>=0) notePaths[i]=path; else notePaths.Add(path);
+    currentNote=path; noteReadable=true; savedText=text;
+    loading=true; editor.Text=text; loading=false; ClearHistory(); blankDraft=false;
+   } else notePaths.Add(path);
+   last=path;
   }
-  if(last!=null) { if(last==currentNote) { RefreshTabs(); if(previewing) RenderPreview(); else if(mapping) RenderMap(true); } else SwitchNote(last); }
+  SaveTabOrder();
+  if(last!=null) {
+   if(last==currentNote) { RefreshTabs(); if(previewing) RenderPreview(); else if(mapping) RenderMap(true); else if(expanded) editor.Focus(); }
+   else SwitchNote(last);
+  }
   if(skipped.Count>0) Msg("以下文件有问题：\n"+string.Join("\n",skipped.ToArray()));
  }
- // 当前归档文件夹或默认的 archive 文件夹里的文件。
- bool InArchive(string path) { string parent=Path.GetDirectoryName(path); return SamePath(parent,ArchiveDir()) || SamePath(parent,Path.Combine(dir,"archive")); }
- // 读成文字：有 BOM 按 BOM；否则先按 UTF-8，不是合法 UTF-8 就按系统默认编码（中文 Windows 为 GBK）。能打开返回 null，否则返回原因。
- static string ReadTextFile(string path,out string text) {
-  text=null;
-  try {
-   if(new FileInfo(path).Length>5*1024*1024) return "文件超过 5 MB";
-   byte[] bytes=File.ReadAllBytes(path);
-   try { using(var r=new StreamReader(new MemoryStream(bytes),new System.Text.UTF8Encoding(false,true),true)) text=r.ReadToEnd(); }
-   catch(System.Text.DecoderFallbackException) { text=System.Text.Encoding.Default.GetString(bytes); }
-   if(text.IndexOf('\0')>=0) { text=null; return "看起来不是文本文件"; }
-   return null;
-  } catch(Exception ex) { return ex.Message; }
+
+ // ——— 保存 ———
+ NoteFileState StateOf(string path) {
+  NoteFileState st;
+  if(!noteStates.TryGetValue(path,out st)) { st=new NoteFileState { Path=path, Encoding=new UTF8Encoding(true), Bom=true }; noteStates[path]=st; }
+  return st;
  }
- // ——— 关闭笔记 ———
- // 空笔记直接关掉；有内容时问一句：归档，还是不要了（移到回收站）。
+ void RefreshStamp(NoteFileState st,string text) {
+  try { var fi=new FileInfo(st.Path); st.LastWriteUtc=fi.LastWriteTimeUtc; st.Length=fi.Length; } catch { st.LastWriteUtc=DateTime.MinValue; st.Length=-1; }
+  st.LastSavedText=text??""; st.Readable=true;
+ }
+ bool SaveNote() { return SaveNote(false); }
+ bool SaveNote(bool force) {
+  if(!noteReadable) { SetStatus("读取失败，无法保存",Palette.Warn); Msg("当前笔记未能读取，为保护原文件无法保存。请先复制编辑内容。"); return false; }
+  if(currentNote!=DraftKey) {
+   NoteFileState cur;
+   if(noteStates.TryGetValue(currentNote,out cur) && !cur.Readable) { SetStatus("读取失败，无法保存",Palette.Warn); Msg("当前笔记未能读取，为保护原文件无法保存。请先复制编辑内容。"); return false; }
+  }
+  if(currentNote==DraftKey) {
+   if(editor.Text.Length==0) { SetStatus("已自动保存",Palette.Accent); return true; }
+   if(!EnsureDraftFile()) return false;
+  }
+  var st=StateOf(currentNote);
+  if(!force && !CheckExternalForCurrent()) return false;
+  try {
+   Encoding writeEncoding=st.Encoding; bool writeBom=st.Bom;
+   EnsureWritableEncoding(editor.Text,ref writeEncoding,ref writeBom);
+   WriteTextFile(currentNote,editor.Text,writeEncoding,writeBom);
+   st.Encoding=writeEncoding; st.Bom=writeBom;
+   RefreshStamp(st,editor.Text); savedText=editor.Text; missingNotes.Remove(currentNote); noteReadable=true;
+   SetStatus("已自动保存",Palette.Accent); return true;
+  } catch(Exception ex) {
+   SetStatus("保存失败",Palette.Warn); Msg("笔记保存失败，请复制当前内容后检查磁盘：\n"+ex.Message); return false;
+  }
+ }
+ // 面板展开、切换回来、保存之前都检查磁盘上的修改时间和大小。
+ bool CheckExternalForCurrent() {
+  if(loading || currentNote==DraftKey) return true;
+  var st=StateOf(currentNote);
+  if(!File.Exists(currentNote)) { MarkMissing(currentNote); ShowMissingCard(currentNote); return false; }
+  FileInfo fi;
+  try { fi=new FileInfo(currentNote); } catch { return true; }
+  if(fi.LastWriteTimeUtc==st.LastWriteUtc && fi.Length==st.Length) { missingNotes.Remove(currentNote); return true; }
+  string text, error=ReadTextFile(currentNote,out text,out var encoding,out var bom);
+  if(error!=null) { SetStatus("读取失败",Palette.Warn); Msg("无法读取磁盘上的这篇笔记："+error); return false; }
+  if(editor.Text==st.LastSavedText) {
+   ReloadFromDisk(text,encoding,bom,true);
+   SetStatus("已重新读取",Palette.Muted);
+   return true;
+  }
+  ShowConflictCard();
+  return false;
+ }
+ void ReloadFromDisk(string text,Encoding encoding,bool bom,bool silent) {
+  if(editingBlock>=0) { FinishEdit(); RenderPreview(); }
+  timer.Stop();
+  int at=editor.CaretIndex, len=editor.SelectionLength;
+  loading=true; editor.Text=text; loading=false;
+  try { editor.CaretIndex=Math.Min(at,editor.Text.Length); if(len>0) editor.Select(Math.Min(at,editor.Text.Length),Math.Min(len,editor.Text.Length-Math.Min(at,editor.Text.Length))); } catch {}
+  var st=StateOf(currentNote); st.Encoding=encoding; st.Bom=bom; RefreshStamp(st,text); savedText=text; missingNotes.Remove(currentNote); noteReadable=true; ClearHistory();
+  RefreshTabs(); if(previewing) RenderPreview(); else if(mapping) RenderMap(true);
+  if(!silent) SetStatus("已重新读取",Palette.Muted);
+ }
+ void MarkMissing(string path) {
+  missingNotes.Add(path); if(path==currentNote) SetStatus("文件已被移走或删除",Palette.Warn); RefreshTabs();
+ }
+ // ——— 关闭 ———
  void CloseNote(string name) {
   CloseSettings(); if(editingBlock>=0) { FinishEdit(); if(previewing) RenderPreview(); }
-  timer.Stop(); if(!SaveNote()) return;
+  timer.Stop();
+  if(name==currentNote) { if(!SaveNote()) return; name=RenameNoteAtOpportunity(name); }
+  else name=RenameNoteAtOpportunity(name);
   string text;
-  try { string path=Path.Combine(dir,name); text=name==currentNote?editor.Text:(File.Exists(path)?File.ReadAllText(path):""); }
-  catch(Exception ex) { Msg("无法读取这篇笔记："+ex.Message); return; }
+  if(name==currentNote) text=editor.Text;
+  else {
+   NoteFileState st;
+   text=noteStates.TryGetValue(name,out st)?st.LastSavedText:"";
+   if(!File.Exists(name) && !noteStates.ContainsKey(name)) text="";
+  }
   if(text.Trim().Length==0) { RemoveNote(name,"empty"); return; }
-  closingNote=name; closeTitle.Text="关闭“"+GetNoteTitle(name)+"”？"; closeOpen=true; closeView.Visibility=Visibility.Visible;
-  Dispatcher.BeginInvoke(new Action(()=>closeArchiveBtn.Focus()),DispatcherPriority.Input);
+  if(!File.Exists(name)) { RemoveNote(name,"close"); return; }
+  closeTarget=name;
+  ShowConfirm("关闭「"+GetNoteTitle(name)+"」？","关闭后文件仍保留在原位置，之后可以用“打开”找回。","选“删除文件”会把它移到回收站，需要时还能找回。");
+  AddConfirmButton("仅关闭","从标签里关掉，文件保留（Enter）",true,false,true,()=>ConfirmClose("close"));
+  AddConfirmButton("删除文件","把文件移到回收站",false,true,true,()=>ConfirmClose("delete"));
+  AddConfirmButton("取消","不关闭（Esc）",false,false,false,HideConfirm);
+  confirmPrimaryBtn.Focus();
  }
- void HideCloseDialog() { if(!closeOpen) return; closeOpen=false; closingNote=null; closeView.Visibility=Visibility.Collapsed; if(expanded && Writing) editor.Focus(); }
- void ConfirmClose(string mode) { string name=closingNote; HideCloseDialog(); if(name!=null) RemoveNote(name,mode); }
- Border BuildCloseDialog() {
-  var view=new Border { Background=Palette.Scrim, Visibility=Visibility.Collapsed };
-  view.MouseLeftButtonDown+=(s,e)=> { if(e.OriginalSource==view) HideCloseDialog(); };
-  var card=new Border { Background=Palette.Surface, BorderBrush=Palette.Line, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(12), Padding=new Thickness(20,18,20,16), Margin=new Thickness(10,0,10,40), VerticalAlignment=VerticalAlignment.Center };
-  view.Child=card; var list=new StackPanel(); card.Child=list;
-  closeTitle=new TextBlock { Foreground=Palette.Text, FontSize=15.5, FontWeight=FontWeights.SemiBold, TextTrimming=TextTrimming.CharacterEllipsis }; list.Children.Add(closeTitle);
-  list.Children.Add(new TextBlock { Text="关闭后它不会再出现在标签里。要归档保留，还是不要了？", Foreground=Palette.Muted, FontSize=12.5, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,8,0,0), LineHeight=20 });
-  list.Children.Add(new TextBlock { Text="选“不保留”会把它移到回收站，需要时还能找回。", Foreground=Palette.Muted, Opacity=0.75, FontSize=11.5, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0) });
-  var row=new DockPanel { LastChildFill=false, Margin=new Thickness(0,18,0,0) }; list.Children.Add(row);
-  closeArchiveBtn=Ui.Button(Ui.IconLabel(G_Archive,"归档"),"放进归档文件夹，需要时用“打开”取回（Enter）"); closeArchiveBtn.Background=Palette.AccentBg; closeArchiveBtn.Foreground=Palette.Accent; closeArchiveBtn.FontWeight=FontWeights.SemiBold; closeArchiveBtn.Padding=new Thickness(16,0,16,0);
-  closeArchiveBtn.Click+=(s,e)=>ConfirmClose("archive"); DockPanel.SetDock(closeArchiveBtn,Dock.Right); row.Children.Add(closeArchiveBtn);
-  var discard=Ui.Button("不保留","移到回收站"); discard.Background=Palette.Raised; discard.Foreground=Palette.Warn; discard.Padding=new Thickness(14,0,14,0); discard.Margin=new Thickness(0,0,8,0);
-  discard.Click+=(s,e)=>ConfirmClose("discard"); DockPanel.SetDock(discard,Dock.Right); row.Children.Add(discard);
-  var cancel=Ui.Button("取消","不关闭（Esc）"); cancel.Foreground=Palette.Muted; cancel.Click+=(s,e)=>HideCloseDialog(); DockPanel.SetDock(cancel,Dock.Left); row.Children.Add(cancel);
-  return view;
- }
- static void Discard(string path) { Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path,Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin); }
- // mode：archive 归档 / discard 移到回收站 / empty 空笔记直接删除。
- // 关掉第一篇（note.md）时，后面那篇顶上来成为第一篇；只剩它一篇时变成一篇空白笔记。
+ void ConfirmClose(string mode) { string name=closeTarget; HideConfirm(); if(name!=null) RemoveNote(name,mode); }
+ // mode：close 只关标签 / delete 移到回收站 / empty 空内容（保存位置里的文件移到回收站，别处不动）。
  void RemoveNote(string name,string mode) {
-  string path=Path.Combine(dir,name);
-  var order=new List<string>(noteNames); int idx=order.IndexOf(name);
-  string neighbor=null; if(idx>=0 && order.Count>1) neighbor=idx+1<order.Count?order[idx+1]:order[idx-1];
+  int idx=IndexOfPath(name);
   modal++;
   try {
-   if(mode=="archive") {
-    string text=File.Exists(path)?File.ReadAllText(path):""; string archive=ArchiveDir(); Directory.CreateDirectory(archive);
-    string dest=ArchiveDestination(archive,text,DateTime.Now);
-    if(File.Exists(path)) File.Move(path,dest);
-   }
-   else if(mode=="discard") { if(File.Exists(path)) Discard(path); }
-   else { if(File.Exists(path)) File.Delete(path); }
-  }
-  catch(Exception ex) { modal--; Msg((mode=="archive"?"归档失败：":"关闭失败：")+ex.Message+(mode=="archive"?"\n\n可以在设置里换一个归档位置。":"")); return; }
+   if(mode=="delete") { if(File.Exists(name)) Discard(name); }
+   else if(mode=="empty") { string parent=name==DraftKey?null:Path.GetDirectoryName(name); if(name!=DraftKey && SamePath(parent,SaveDir()) && File.Exists(name)) Discard(name); }
+  } catch(Exception ex) { modal--; Msg("关闭失败："+ex.Message); return; }
   modal--;
-  string promoted=null;
-  if(name=="note.md") {
-   try {
-    string next=null; foreach(var n in order) if(n!="note.md" && File.Exists(Path.Combine(dir,n))) { next=n; break; }
-    if(next!=null) { File.Move(Path.Combine(dir,next),path); promoted=next; }
-    else using(new FileStream(path,FileMode.Create)) {}
-   } catch(Exception ex) { Msg("整理笔记顺序失败："+ex.Message); }
+  bool wasCurrent=name==currentNote;
+  if(idx>=0) notePaths.RemoveAt(idx);
+  noteStates.Remove(name); missingNotes.Remove(name); folds.Remove(name);
+  if(notePaths.Count==0) { SaveFolds(); ShowBlankDraft(); return; }
+  string target=wasCurrent?notePaths[Math.Min(idx<0?0:idx,notePaths.Count-1)]:currentNote;
+  SaveTabOrder(); SaveFolds();
+  if(wasCurrent) {
+   string text; NoteFileState st;
+   if(LoadTabText(target,out text,out st)) {
+    loading=true; currentNote=target; noteReadable=(target==DraftKey)||st==null||st.Readable; savedText=text; editor.Text=text; loading=false; ClearHistory();
+   } else {
+    loading=true; currentNote=target; noteReadable=false; savedText=""; editor.Text=""; loading=false; ClearHistory(); SetStatus("读取失败，无法保存",Palette.Warn);
+   }
   }
-  // 折叠记录跟着笔记走：关掉的删掉，顶上来的那篇改记到 note.md 名下。
-  folds.Remove(name); HashSet<string> moved; if(promoted!=null && folds.TryGetValue(promoted,out moved)) { folds.Remove(promoted); folds["note.md"]=moved; }
-  SaveFolds();
-  // 标签顺序同理：关掉的移出；顶上来的那篇在原位置改叫 note.md。
-  if(tabOrder.Count>0) { tabOrder.Remove(name); if(promoted!=null) { int at=tabOrder.IndexOf(promoted); if(at>=0) tabOrder[at]="note.md"; } SaveTabOrder(); }
-  ClearHistory();
-  string target=name==currentNote?(neighbor??"note.md"):currentNote;
-  if(target==promoted) target="note.md";
-  string text2="";
-  try { string tp=Path.Combine(dir,target); if(File.Exists(tp)) text2=File.ReadAllText(tp); else target="note.md"; } catch(Exception ex) { Msg("无法打开笔记："+ex.Message); }
-  loading=true; currentNote=target; noteReadable=true; editor.Text=text2; loading=false;
   RefreshTabs(); if(previewing) RenderPreview(); else if(mapping) RenderMap(true); else if(expanded) editor.Focus();
+  if(wasCurrent && missingNotes.Contains(currentNote)) { SetStatus("文件已被移走或删除",Palette.Warn); ShowMissingCard(currentNote); }
+ }
+ static void Discard(string path) { Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path,Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin); }
+
+ // ——— 改名 ———
+ string RenameNoteAtOpportunity(string path) {
+  if(string.IsNullOrEmpty(path) || path==DraftKey) return path;
+  NoteFileState st=StateOf(path);
+  string text=path==currentNote?editor.Text:st.LastSavedText;
+  string title=TitleOf(text);
+  if(!ShouldRename(path,title,st.NamedTitle,SaveDir())) return path;
+  if(!File.Exists(path)) return path;
+  string extension=Path.GetExtension(path); if(extension.Length==0) extension=".md";
+  string target=UniqueFile(SaveDir(),NoteFileName(title,extension),path);
+  if(SamePath(target,path)) { st.NamedTitle=title; return path; }
+  try { File.Move(path,target); } catch { return path; }
+  noteStates.Remove(path); st.Path=target; st.NamedTitle=title; noteStates[target]=st;
+  missingNotes.Remove(path);
+  int i=IndexOfPath(path); if(i>=0) notePaths[i]=target;
+  HashSet<string> set;
+  if(folds.TryGetValue(path,out set)) { folds.Remove(path); folds[target]=set; SaveFolds(); }
+  if(currentNote==path) currentNote=target;
+  SaveTabOrder(); RefreshTabs();
+  return target;
+ }
+ void RenameCurrentAtOpportunity() { if(currentNote!=DraftKey) RenameNoteAtOpportunity(currentNote); }
+ void RenameAllAtOpportunity() { foreach(string path in new List<string>(notePaths)) RenameNoteAtOpportunity(path); }
+
+ // ——— 外部修改和文件丢失的卡片 ———
+ void ShowConflictCard() {
+  if(confirmOpen) return;
+  ShowConfirm("「"+GetNoteTitle(currentNote)+"」在别处被修改了",null,null);
+  AddConfirmButton("保留我的版本",null,true,false,true,KeepMyVersion);
+  AddConfirmButton("用文件里的版本","用磁盘上现在的内容替换编辑区",false,false,true,UseFileVersion);
+  confirmPrimaryBtn.Focus();
+ }
+ void UseFileVersion() {
+  HideConfirm();
+  string text, error=ReadTextFile(currentNote,out text,out var encoding,out var bom);
+  if(error!=null) { Msg("无法读取磁盘上的这篇笔记："+error); return; }
+  ReloadFromDisk(text,encoding,bom,false);
+ }
+ void KeepMyVersion() {
+  HideConfirm();
+  if(!SaveNote(true)) return;
   SetStatus("已自动保存",Palette.Accent);
  }
- internal static string TitleOf(string text) {
-  string t="";
-  foreach(string raw in text.Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries)) {
-   t=raw.Trim();
-   t=Regex.Replace(t,@"^#{1,6}\s*",""); t=Regex.Replace(t,@"^(>\s*)+","");
-   t=Regex.Replace(t,@"^([-*+]\s+(\[[ xX]\]\s+)?|\d{1,9}[.)]\s+)","");
-   t=Regex.Replace(t,@"\[([^\]]+)\]\([^)]*\)","$1"); t=Regex.Replace(t,@"(\*\*|__|~~|`|\*)","");
-   t=t.Trim(); if(t.Length>0) break;
-  }
-  foreach(char c in Path.GetInvalidFileNameChars()) t=t.Replace(c,' ');
-  t=Regex.Replace(t,@"\s+"," ").Trim().TrimEnd('.',' ');
-  if(t.Length>60) t=t.Substring(0,60).TrimEnd('.',' ');
-  return t.Length==0?"未命名笔记":t;
+ void ShowMissingCard(string path) {
+  if(confirmOpen || path!=currentNote) return;
+  ShowConfirm("「"+GetNoteTitle(path)+"」的文件已被移走或删除",null,null);
+  AddConfirmButton("重新保存到原位置",null,true,false,true,()=>ResaveMissing(path));
+  AddConfirmButton("关闭标签",null,false,false,true,()=> { HideConfirm(); RemoveNote(path,"close"); });
+  confirmPrimaryBtn.Focus();
  }
- // 归档目标：标题 + 时间戳，重名时依次加 _2、_3…
- internal static string ArchiveDestination(string archive,string text,DateTime now) {
-  string stem=TitleOf(text)+"_"+now.ToString("yyyy-MM-dd_HH-mm-ss",System.Globalization.CultureInfo.InvariantCulture); string dest=Path.Combine(archive,stem+".md");
-  for(int k=2;File.Exists(dest);k++) dest=Path.Combine(archive,stem+"_"+k+".md");
-  return dest;
+ void ResaveMissing(string path) {
+  HideConfirm();
+  try {
+   Directory.CreateDirectory(Path.GetDirectoryName(path));
+   if(!SaveNote(true)) return;
+   missingNotes.Remove(path); RefreshTabs();
+  } catch(Exception ex) { Msg("重新保存失败："+ex.Message); }
  }
- bool SaveNote() { if(!noteReadable) { SetStatus("读取失败，无法保存",Palette.Warn); Msg("当前笔记未能读取，为保护原文件无法保存。请先复制编辑内容。"); return false; } try { string target=Path.Combine(dir,currentNote); string temp=target+".tmp"; File.WriteAllText(temp,editor.Text,System.Text.Encoding.UTF8); if(File.Exists(target)) File.Replace(temp,target,null); else File.Move(temp,target); SetStatus("已自动保存",Palette.Accent); return true; } catch(Exception ex) { SetStatus("保存失败",Palette.Warn); Msg("笔记保存失败，请复制当前内容后检查磁盘：\n"+ex.Message); return false;} }
+
+ // ——— 卡片外壳 ———
+ Border BuildConfirmCard() {
+  var view=new Border { Background=Palette.Scrim, Visibility=Visibility.Collapsed };
+  view.MouseLeftButtonDown+=(s,e)=> { if(e.OriginalSource==view) HideConfirm(); };
+  var card=new Border { Background=Palette.Surface, BorderBrush=Palette.Line, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(12), Padding=new Thickness(20,18,20,16), Margin=new Thickness(10,0,10,40), VerticalAlignment=VerticalAlignment.Center };
+  view.Child=card; var list=new StackPanel(); card.Child=list;
+  confirmTitle=new TextBlock { Foreground=Palette.Text, FontSize=15.5, FontWeight=FontWeights.SemiBold, TextWrapping=TextWrapping.Wrap, TextTrimming=TextTrimming.CharacterEllipsis }; list.Children.Add(confirmTitle);
+  confirmBody=new TextBlock { Foreground=Palette.Muted, FontSize=12.5, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,8,0,0), LineHeight=20, Visibility=Visibility.Collapsed }; list.Children.Add(confirmBody);
+  confirmHint=new TextBlock { Foreground=Palette.Muted, Opacity=0.75, FontSize=11.5, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Visibility=Visibility.Collapsed }; list.Children.Add(confirmHint);
+  confirmButtons=new DockPanel { LastChildFill=false, Margin=new Thickness(0,18,0,0) }; list.Children.Add(confirmButtons);
+  return view;
+ }
+ void ShowConfirm(string title,string body,string hint) {
+  confirmTitle.Text=title; confirmBody.Text=body??""; confirmHint.Text=hint??"";
+  confirmBody.Visibility=string.IsNullOrEmpty(body)?Visibility.Collapsed:Visibility.Visible;
+  confirmHint.Visibility=string.IsNullOrEmpty(hint)?Visibility.Collapsed:Visibility.Visible;
+  confirmButtons.Children.Clear(); confirmView.Visibility=Visibility.Visible; confirmOpen=true;
+ }
+ void AddConfirmButton(string text,string tip,bool primary,bool warn,bool dockRight,Action action) {
+  var b=Ui.Button(text,tip); b.Padding=new Thickness(16,0,16,0); b.Margin=new Thickness(0,0,8,0);
+  if(warn) { b.Background=Palette.Raised; b.Foreground=Palette.Warn; }
+  else if(primary) { b.Background=Palette.AccentBg; b.Foreground=Palette.Accent; b.FontWeight=FontWeights.SemiBold; }
+  else { b.Background=Palette.Raised; b.Foreground=Palette.Text; }
+  b.Click+=(s,e)=>action();
+  if(dockRight) DockPanel.SetDock(b,Dock.Right); else DockPanel.SetDock(b,Dock.Left);
+  confirmButtons.Children.Add(b);
+  if(primary) confirmPrimaryBtn=b;
+ }
+ void HideConfirm() {
+  if(!confirmOpen) return;
+  confirmOpen=false; closeTarget=null; confirmView.Visibility=Visibility.Collapsed;
+  if(expanded && Writing) editor.Focus();
+ }
 
  // ——— 文件暂存 ———
  void AddFiles(string[] paths) { foreach(string path in paths) if(!files.Contains(path)) files.Add(path); SaveShelf(); RefreshShelf(); }
@@ -257,7 +461,6 @@ partial class MainWindow {
  }
  void RefreshShelf() {
   shelf.Children.Clear(); shelfTray=null; shelfHint=null; ShowDropZone(); UpdatePresenting();
-  // 空状态只留一个 16px 的 Muted 线条托盘图标，文字提示和虚线框都不显示；提示文字放在整条的 ToolTip 上。
   if(files.Count==0) {
    shelfTray=LineIcon.Make(LineIcon.Tray,null,16); shelfTray.SetValue(TextElement.ForegroundProperty,Palette.Muted); shelfTray.Margin=new Thickness(12,0,12,0);
    shelf.Children.Add(shelfTray);

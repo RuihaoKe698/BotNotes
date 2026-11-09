@@ -50,19 +50,19 @@ partial class MainWindow {
  }
  void OpenSettings() { if(editingBlock>=0) { FinishEdit(); RenderPreview(); } settingsOpen=true; UpdateSettingsView(); settingsView.Visibility=Visibility.Visible; PreviewBreathe(); settingsButton.Background=Palette.Raised; settingsButton.Foreground=Palette.Text; }
  void CloseSettings() { if(!settingsOpen) return; settingsOpen=false; PreviewBreathe(); settingsView.Visibility=Visibility.Collapsed; settingsButton.Background=Brushes.Transparent; settingsButton.Foreground=Palette.Muted; if(expanded && Writing) editor.Focus(); }
- void PickArchive() {
+ void PickSaveDir() {
   modal++;
   try {
    using(var d=new Forms.FolderBrowserDialog()) {
-    d.Description="选择归档文件夹"; d.ShowNewFolderButton=true;
-    try { if(Directory.Exists(ArchiveDir())) d.SelectedPath=ArchiveDir(); } catch {}
+    d.Description="选择保存位置"; d.ShowNewFolderButton=true;
+    try { if(Directory.Exists(SaveDir())) d.SelectedPath=SaveDir(); } catch {}
     if(d.ShowDialog(new Win32Owner(new System.Windows.Interop.WindowInteropHelper(this).Handle))!=Forms.DialogResult.OK || string.IsNullOrEmpty(d.SelectedPath)) return;
-    if(SamePath(d.SelectedPath,dir)) { Msg("不能选笔记所在的文件夹，否则归档的笔记会重新出现在标签里。请换一个文件夹。"); return; }
-    archiveDir=SamePath(d.SelectedPath,Path.Combine(dir,"archive"))?null:d.SelectedPath; SaveSettings(); UpdateSettingsView();
+    if(SamePath(d.SelectedPath,dir) || d.SelectedPath.StartsWith(dir+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) { Msg("不能选程序自己的数据文件夹。请换一个文件夹。"); return; }
+    saveDir=SamePath(d.SelectedPath,DefaultSaveDir())?null:d.SelectedPath; SaveSettings(); UpdateSettingsView();
    }
   } finally { modal--; }
  }
- void OpenArchive() { try { string p=ArchiveDir(); Directory.CreateDirectory(p); System.Diagnostics.Process.Start("explorer.exe","\""+p+"\""); } catch(Exception ex) { Msg("无法打开归档文件夹："+ex.Message); } }
+ void OpenSaveDir() { try { string p=SaveDir(); Directory.CreateDirectory(p); System.Diagnostics.Process.Start("explorer.exe","\""+p+"\""); } catch(Exception ex) { Msg("无法打开保存位置："+ex.Message); } }
 
 }
 }

@@ -361,7 +361,7 @@ partial class MainWindow {
   editor.Text=prev; leftPreviewText=prev; RenderMap(false); Refit();
  }
  void MapKey(object sender,KeyEventArgs e) {
-  if(!mapping || settingsOpen || closeOpen) return;
+  if(!mapping || settingsOpen || confirmOpen) return;
   var key=e.Key==Key.System?e.SystemKey:e.Key; var mods=Keyboard.Modifiers;
   if(mapBox!=null) {
    if(key==Key.Enter && mods==ModifierKeys.None) { EndMapEdit(true); e.Handled=true; }

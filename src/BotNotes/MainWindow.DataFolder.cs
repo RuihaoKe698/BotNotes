@@ -54,7 +54,7 @@ partial class MainWindow {
    }
   } catch {}
  }
- // 旧数据文件夹搬走后，指向它里面的归档位置跟着改
+ // 旧数据文件夹搬走后，旧设置里指向它里面的归档位置 / 保存位置跟着改
  internal static string RewriteArchiveDir(string archiveDir,string newRoot) {
   foreach(var name in OldDataNames) { string oldRoot=AppData(name);
    if(archiveDir!=null && !Directory.Exists(oldRoot) && archiveDir.StartsWith(oldRoot+"\\",StringComparison.OrdinalIgnoreCase)) archiveDir=newRoot+archiveDir.Substring(oldRoot.Length); }

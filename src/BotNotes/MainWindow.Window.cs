@@ -226,7 +226,8 @@ partial class MainWindow {
  // 展开：刘海不动，面板连同内容从刘海下面展开（320ms，先快后慢）；内容在 90ms 后淡入下滑，阴影在快展满时淡入。
  void Expand(bool transientOpen) {
   if(expanded) { if(!transientOpen) transient=false; Activate(); return; }
-  StopWriting(); if(writeDelay!=null) writeDelay.Stop(); expandedText=editor.Text;
+  StopWriting(); if(writeDelay!=null) writeDelay.Stop();
+  CheckExternalForCurrent(); expandedText=editor.Text;
   bool wasVisible=body.Visibility==Visibility.Visible; double fromOpacity=wasVisible?body.Opacity:0;
   if(!wasVisible) PlaceWindow(); // 收起动画还没走完时不重摆，免得打断它
   Rect from=wasVisible?panelClip.Rect:TuckClip();
@@ -255,9 +256,9 @@ partial class MainWindow {
  void Collapse() {
   if(!expanded) return;
   if(fullscreen) SetFullscreen(false); // 收起前先回到原来的大小，小圆点才在原位置
-  HideCloseDialog();
+  HideConfirm();
   if(editingBlock>=0) { FinishEdit(); RenderPreview(); }
-  if(!loading) {timer.Stop(); if(!SaveNote()) return;}
+  if(!loading) {timer.Stop(); if(!SaveNote()) return; RenameCurrentAtOpportunity();}
   bool changed=expandedText!=null && editor.Text!=expandedText; expandedText=null;
   expanded=false; transient=false; leaveTimer.Stop(); hoverTimer.Stop(); if(settingsOpen) PreviewBreathe();
   int gen=++animGen;
@@ -377,6 +378,15 @@ partial class MainWindow {
  void ToggleSleep() { if(!awake) {if(SetThreadExecutionState(ES_CONTINUOUS|ES_SYSTEM_REQUIRED)==0) {Msg("无法阻止系统睡眠。"); return;} awake=true;} else {SetThreadExecutionState(ES_CONTINUOUS); awake=false;} ShowSleepState(); }
  // 出错退出前收起通知区域图标，免得留下一个点了没反应的图标。
  internal void HideTray() { if(tray!=null) { tray.Visible=false; tray.Dispose(); } }
- void Quit() {timer.Stop(); if(!SaveNote()) {Expand(false); if(!Ask("当前内容没能保存。如果需要，请先把要保留的文字复制出来。","放弃未保存的更改并退出？","放弃并退出",true)) return;} SetThreadExecutionState(ES_CONTINUOUS); tray.Visible=false; tray.Dispose(); quitting=true; Close(); Application.Current.Shutdown();}
+ void Quit() {
+  timer.Stop();
+  if(!SaveNote()) {
+   Expand(false);
+   if(confirmOpen) return;
+   if(!Ask("当前内容没能保存。如果需要，请先把要保留的文字复制出来。","放弃未保存的更改并退出？","放弃并退出",true)) return;
+  }
+  RenameAllAtOpportunity(); SaveTabOrder(); SaveFolds();
+  SetThreadExecutionState(ES_CONTINUOUS); tray.Visible=false; tray.Dispose(); quitting=true; Close(); Application.Current.Shutdown();
+ }
 }
 }

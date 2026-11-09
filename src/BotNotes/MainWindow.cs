@@ -35,13 +35,15 @@ partial class MainWindow : Window {
  [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
  [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int cx,int cy,uint flags);
  const uint ES_CONTINUOUS=0x80000000, ES_SYSTEM_REQUIRED=1;
- const string G_Note="\uE70B", G_Close="\uE8BB", G_Add="\uE710", G_Minus="\uE738", G_Archive="\uE7B8", G_Sun="\uE706", G_File="\uE8A5", G_Folder="\uE8B7", G_Image="\uEB9F", G_Settings="\uE713", G_Pin="\uE718", G_Open="\uE8E5";
+ const string G_Note="\uE70B", G_Close="\uE8BB", G_Add="\uE710", G_Minus="\uE738", G_Sun="\uE706", G_File="\uE8A5", G_Folder="\uE8B7", G_Image="\uEB9F", G_Settings="\uE713", G_Pin="\uE718", G_Open="\uE8E5";
  const int K_Line=0, K_Blank=1, K_Code=2;
  readonly List<string> files=new List<string>();
- readonly List<string> noteNames=new List<string>();
- TextBox editor; TextBlock saveStatus; System.Windows.Shapes.Ellipse statusDot; StackPanel shelf, toolbar, tabs; ScrollViewer tabsScroll; string currentNote="note.md", currentTitle="";
+ readonly List<string> notePaths=new List<string>();
+ readonly Dictionary<string,NoteFileState> noteStates=new Dictionary<string,NoteFileState>(StringComparer.OrdinalIgnoreCase);
+ readonly HashSet<string> missingNotes=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+ TextBox editor; TextBlock saveStatus; System.Windows.Shapes.Ellipse statusDot; StackPanel shelf, toolbar, tabs; ScrollViewer tabsScroll; string currentNote=DraftKey, currentTitle="", savedText="";
  Button editTab, previewTab, settingsButton; bool previewing=false; Border body, outerBox, shelfBorder; Button notch, sleepButton; Forms.NotifyIcon tray;
- bool expanded=false, awake=false, loading=true, quitting=false, noteReadable=true, shelfReadable=true;
+ bool expanded=false, awake=false, loading=true, quitting=false, noteReadable=true, shelfReadable=true, draftCreateWarned=false;
  bool transient=false, dragInside=false, draggingOut=false; int modal=0;
  DispatcherTimer timer, hoverTimer, leaveTimer; Point dragStart;
  // 预览：按行渲染，点哪行就把哪行换成原文输入框。
@@ -60,12 +62,12 @@ partial class MainWindow : Window {
  // 标题折叠：每篇笔记记下折叠了哪些标题（级别 + 文字 + 第几个同名）。
  static readonly Regex HeadingRe=new Regex(@"^(#{1,6})\s+(.+)$");
  static readonly double[] HeadSize={21,18,16,15,14.5,14}, HeadLine={30,27,25,24,24,22};
- readonly Dictionary<string,HashSet<string>> folds=new Dictionary<string,HashSet<string>>();
+ readonly Dictionary<string,HashSet<string>> folds=new Dictionary<string,HashSet<string>>(StringComparer.OrdinalIgnoreCase);
  int[] headLevel=new int[0], foldEnd=new int[0], foldCount=new int[0]; string[] foldKey=new string[0]; bool[] blockHidden=new bool[0];
  RectangleGeometry panelClip; int animGen=0;
  bool pinned=false; Button pinButton; System.Windows.Shapes.Path notchShape; Border shadowNear, shadowFar; Grid outerGrid; System.Windows.Shapes.Rectangle dropZone; TextBlock shelfCount;
- int hoverDelay=600; bool hoverOn=true; string archiveDir=null; bool settingsOpen=false;
- Border closeView; TextBlock closeTitle; Button closeArchiveBtn; string closingNote; bool closeOpen=false;
+ int hoverDelay=600; bool hoverOn=true; string saveDir=null; int storageVersion=0; bool settingsOpen=false;
+ Border confirmView; TextBlock confirmTitle, confirmBody, confirmHint; DockPanel confirmButtons; Button confirmPrimaryBtn; bool confirmOpen=false; string closeTarget=null;
  Color background=Palette.DefaultBackground; readonly List<KeyValuePair<Color,Border>> bgRings=new List<KeyValuePair<Color,Border>>(); Button customBgBtn;
  static readonly string[][] BgPresets={ new[]{"#0F1013","曜石黑"}, new[]{"#1C1D21","石墨灰"}, new[]{"#0E1522","午夜蓝"}, new[]{"#0E1A15","墨绿"}, new[]{"#1A1411","暖咖"}, new[]{"#F4F3EF","纸白（浅色）"} };
  Color accent=Palette.DefaultAccent; readonly List<KeyValuePair<Color,System.Windows.Shapes.Ellipse>> swatchRings=new List<KeyValuePair<Color,System.Windows.Shapes.Ellipse>>(); Button customColorBtn;
@@ -82,14 +84,14 @@ partial class MainWindow : Window {
  bool Presenting { get { return presenting && fullscreen && mapping; } }
  ScaleTransform mapScale=new ScaleTransform(1,1); TranslateTransform mapPan=new TranslateTransform(); Point mapFrom, mapPanFrom; MapNode mapRoot, mapHit; readonly HashSet<string> mapFolds=new HashSet<string>();
  static readonly string G_Full=((char)0xE740).ToString(), G_Unfull=((char)0xE73F).ToString(), G_Map=((char)0xF158).ToString(), G_Fit=((char)0xE9A6).ToString(), G_Export=((char)0xE896).ToString(), G_Edit=((char)0xE70F).ToString();
- // 标签顺序：用户拖过之后记在 order.txt；没记过的笔记（比如新建的）排在最后。
- readonly List<string> tabOrder=new List<string>(); string tabDragName; bool tabDragMoved; double tabGrab;
+ // 标签顺序就是 notePaths 的顺序；order.txt 只记真实文件，不记空白草稿。
+ string tabDragName; bool tabDragMoved, tabDragging; double tabGrab;
  // 预览里的撤销 / 重做：每一步记下整篇原文。同一行连续打字（停顿不到 1.5 秒）算一步。
  readonly List<string> undoTexts=new List<string>(), redoTexts=new List<string>(); object histGroup; DateTime histAt; string leftPreviewText; static readonly object NoUndo=new object();
  // 预览里的选择：按住拖过几行就选中这些行，可以复制成纯文字或 Markdown 原文。
  Border previewPage; int selFrom=-1, selTo=-1, pressLine=-1, pressCaret=-1, pressAnchor=-1; bool pressArmed=false, selecting=false; Point pressAt;
  StackPanel selBar; Border selPill; TextBlock selInfo; static readonly string G_Copy=((char)0xE8C8).ToString(), G_Cut=((char)0xE8C6).ToString(), G_Delete=((char)0xE74D).ToString();
- TextBlock shelfHint; FrameworkElement shelfTray; Border settingsView; Button hoverOnBtn, hoverOffBtn, minusBtn, plusBtn, resetArchiveBtn, resetPlaceBtn, resetSizeBtn; TextBlock hoverValue, archivePathText;
+ TextBlock shelfHint; FrameworkElement shelfTray; Border settingsView; Button hoverOnBtn, hoverOffBtn, minusBtn, plusBtn, resetSaveBtn, resetPlaceBtn, resetSizeBtn; TextBlock hoverValue, savePathText;
 
  public MainWindow() {
   Directory.CreateDirectory(dir);
@@ -157,14 +159,14 @@ partial class MainWindow : Window {
   mapTab=Ui.Button(LineIcon.Make(LineIcon.MindMap),"把标题和列表画成脑图，方便演示和讲解 (Ctrl+M)",new CornerRadius(6)); mapTab.Height=26; mapTab.Width=38; mapTab.Padding=new Thickness(0); mapTab.Click+=(s,e)=> { CloseSettings(); SetMap(); }; segRow.Children.Add(mapTab);
   DockPanel.SetDock(seg,Dock.Left); header.Children.Add(seg);
 
-  // 第二行：笔记标签可以横向滚动；新建、打开固定在最右边，标签再多也不会被挤出去。归档在关闭笔记时选。
+  // 第二行：笔记标签可以横向滚动；新建、打开固定在最右边，标签再多也不会被挤出去。
   var tabRow=tabRowPanel=new DockPanel { Margin=new Thickness(0,0,0,10) }; Grid.SetRow(tabRow,1); panel.Children.Add(tabRow);
   var actions=new StackPanel { Orientation=Orientation.Horizontal }; DockPanel.SetDock(actions,Dock.Right); tabRow.Children.Add(actions);
   // 标签放不下时才出现分隔线，说明左边还能滚动。
   tabsEdge=new Border { Width=1, Height=16, Background=Palette.Line, Margin=new Thickness(4,0,4,0), VerticalAlignment=VerticalAlignment.Center, Visibility=Visibility.Collapsed }; actions.Children.Add(tabsEdge);
   var add=tabAdd=Ui.Button(Ui.Icon(G_Add,12),"新建笔记 (Ctrl+N)"); add.Height=28; add.Width=30; add.Padding=new Thickness(0); add.Foreground=Palette.Muted; add.Click+=(s,e)=> { CloseSettings(); NewNote(); }; actions.Children.Add(add);
   // 只显示图标，和“新建 +”一样是 30px 宽的图标按钮；提示文字保持不变。UpdateTabEdges 仍按实际宽度扣掉这两个按钮。
-  var open=tabOpen=Ui.Button(Ui.Icon(G_Open,13),"打开文件（Ctrl+O）：从归档文件夹打开即取回这篇笔记；其他位置的文件只复制进来，原文件不动"); open.Height=28; open.Width=30; open.Padding=new Thickness(0); open.Foreground=Palette.Muted; open.Margin=new Thickness(2,0,0,0); open.Click+=(s,e)=> { CloseSettings(); OpenFiles(); }; actions.Children.Add(open);
+  var open=tabOpen=Ui.Button(Ui.Icon(G_Open,13),"打开文件（Ctrl+O）：直接编辑原文件"); open.Height=28; open.Width=30; open.Padding=new Thickness(0); open.Foreground=Palette.Muted; open.Margin=new Thickness(2,0,0,0); open.Click+=(s,e)=> { CloseSettings(); OpenFiles(); }; actions.Children.Add(open);
   // 标签放不下时两头出现 ‹ ›，点一下翻大半屏；被遮住的一侧边缘渐隐，提示那边还有。
   tabNext=Ui.Button(Ui.Icon("",10),"向右翻（也可以在标签上滚动滚轮）"); tabNext.Width=22; tabNext.Height=28; tabNext.Padding=new Thickness(0); tabNext.Foreground=Palette.Muted; tabNext.Focusable=false; tabNext.Visibility=Visibility.Collapsed; tabNext.Click+=(s,e)=>PageTabs(1); DockPanel.SetDock(tabNext,Dock.Right); tabRow.Children.Add(tabNext);
   tabPrev=Ui.Button(Ui.Icon("",10),"向左翻（也可以在标签上滚动滚轮）"); tabPrev.Width=22; tabPrev.Height=28; tabPrev.Padding=new Thickness(0); tabPrev.Foreground=Palette.Muted; tabPrev.Focusable=false; tabPrev.Visibility=Visibility.Collapsed; tabPrev.Margin=new Thickness(0,0,2,0); tabPrev.Click+=(s,e)=>PageTabs(-1); DockPanel.SetDock(tabPrev,Dock.Left); tabRow.Children.Add(tabPrev);
@@ -190,7 +192,7 @@ partial class MainWindow : Window {
   previewPage.LostMouseCapture+=(s,e)=> { pressArmed=false; selecting=false; };
   previewScroll.Content=previewPage; editGrid.Children.Add(previewScroll);
   BuildMapView(editGrid);
-  editor.TextChanged+=(s,e)=> { if(!loading) { SetStatus("正在保存…",Palette.Muted); timer.Stop(); timer.Start(); } };
+  editor.TextChanged+=(s,e)=> { if(loading) return; if(currentNote==DraftKey && editor.Text.Length>0) EnsureDraftFile(); SetStatus("正在保存…",Palette.Muted); timer.Stop(); timer.Start(); };
   var bar=new DockPanel { Margin=new Thickness(2,4,2,4) }; var barBorder=noteBar=new Border { BorderBrush=Palette.Line, BorderThickness=new Thickness(0,1,0,0), Child=bar, MinHeight=38 }; Grid.SetRow(barBorder,1); editGrid.Children.Add(barBorder);
   var status=new StackPanel { Orientation=Orientation.Horizontal, VerticalAlignment=VerticalAlignment.Center, Margin=new Thickness(12,0,0,0) }; DockPanel.SetDock(status,Dock.Left); headerRow.Children.Add(status);
   statusDot=new System.Windows.Shapes.Ellipse { Width=6, Height=6, Fill=Palette.Accent, Margin=new Thickness(0,1,7,0), VerticalAlignment=VerticalAlignment.Center }; status.Children.Add(statusDot);
@@ -238,7 +240,7 @@ partial class MainWindow : Window {
 
   // 设置面板盖在标签、编辑区和暂存区上方。
   settingsView=BuildSettings(); Grid.SetRow(settingsView,1); Grid.SetRowSpan(settingsView,4); panel.Children.Add(settingsView);
-  closeView=BuildCloseDialog(); Grid.SetRow(closeView,1); Grid.SetRowSpan(closeView,4); panel.Children.Add(closeView);
+  confirmView=BuildConfirmCard(); Grid.SetRow(confirmView,1); Grid.SetRowSpan(confirmView,4); panel.Children.Add(confirmView);
   BuildResizeGrips(root);
 
   // 整个窗口都可以接收文件；拖到收起的顶部条上会先展开。
@@ -248,13 +250,12 @@ partial class MainWindow : Window {
   DragLeave+=(s,e)=> { dragInside=false; if(expanded && transient) leaveTimer.Start(); }; // 拖进来时露出的暂存区不在离开时收回，免得在子元素间移动时来回跳
   Drop+=(s,e)=> { dragInside=false; ShowDropZone(); UpdatePresenting(); if(HasFiles(e)) { transient=false; AddFiles((string[])e.Data.GetData(DataFormats.FileDrop)); e.Handled=true; } };
 
-  timer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(500) }; timer.Tick+=(s,e)=>{ timer.Stop(); if(SaveNote() && GetNoteTitle(currentNote)!=currentTitle) RefreshTabs(); };
+  timer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(500) }; timer.Tick+=(s,e)=>{ timer.Stop(); if(SaveNote()) { if(GetNoteTitle(currentNote)!=currentTitle) RefreshTabs(); } };
   // 悬停或拖入展开的面板，在用户还没点进去时，鼠标离开就收回。
   leaveTimer=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(450) }; leaveTimer.Tick+=(s,e)=> { leaveTimer.Stop(); if(expanded && transient && !pinned && !dragInside && !IsMouseOver) Collapse(); };
 
-  try { string p=Path.Combine(dir,"note.md"); if(File.Exists(p)) editor.Text=File.ReadAllText(p); } catch(Exception ex) { noteReadable=false; SetStatus("读取失败，无法保存",Palette.Warn); Msg("笔记读取失败，自动保存已停用以保护原文件。请备份或检查：\n"+Path.Combine(dir,"note.md")+"\n"+ex.Message); }
   try { string f=Path.Combine(dir,"shelf.txt"); if(File.Exists(f)) foreach(var line in File.ReadAllLines(f)) try {files.Add(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(line)));} catch {} } catch(Exception ex) { shelfReadable=false; Msg("暂存区读取失败，自动保存已停用以保护原文件："+ex.Message); }
-  LoadFolds(); LoadTabOrder();
+  LoadFolds(); LoadInitialTabs();
   loading=false; RefreshShelf(); RefreshTabs(); SetPreview(false);
 
   tray=new Forms.NotifyIcon { Text="BotNotes", Icon=LoadAppIcon(), Visible=true };
@@ -272,7 +273,7 @@ partial class MainWindow : Window {
   PreviewMouseDown+=(s,e)=> { if(expanded) transient=false; };
   MouseEnter+=(s,e)=>leaveTimer.Stop();
   MouseLeave+=(s,e)=> { if(expanded && transient) leaveTimer.Start(); };
-  Deactivated+=(s,e)=> { if(expanded && !pinned && !fullscreen && modal==0 && !draggingOut) Collapse(); };
+  Deactivated+=(s,e)=> { if(expanded && !pinned && !fullscreen && modal==0 && !draggingOut && !confirmOpen) Collapse(); };
   Closing+=(s,e)=> {if(!quitting) {e.Cancel=true; Collapse();}};
   body.Visibility=Visibility.Collapsed; ApplyChrome(false); PlaceWindow();
   // 打开软件时直接展开，一眼就能看到面板在哪里；点别处、Esc 或 × 后再收成小圆点。
