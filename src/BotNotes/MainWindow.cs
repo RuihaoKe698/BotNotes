@@ -40,7 +40,7 @@ partial class MainWindow : Window {
  readonly Dictionary<string,NoteFileState> noteStates=new Dictionary<string,NoteFileState>(StringComparer.OrdinalIgnoreCase);
  readonly HashSet<string> missingNotes=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
  TextBox editor; StackPanel toolbar, tabs; ScrollViewer tabsScroll; string currentNote=DraftKey, currentTitle="", savedText="";
- Button editTab, previewTab, settingsButton; bool previewing=false; Border body, outerBox; Button notch, sleepButton; Forms.NotifyIcon tray;
+ Button editTab, previewTab, settingsButton; bool previewing=false; Border body, outerBox; Button notch, sleepButton, cleanButton; Forms.NotifyIcon tray;
  bool expanded=false, awake=false, loading=true, quitting=false, noteReadable=true, draftCreateWarned=false;
  bool transient=false; int modal=0;
  DispatcherTimer timer, hoverTimer, leaveTimer;
@@ -64,7 +64,7 @@ partial class MainWindow : Window {
  int[] headLevel=new int[0], foldEnd=new int[0], foldCount=new int[0]; string[] foldKey=new string[0]; bool[] blockHidden=new bool[0];
  RectangleGeometry panelClip; int animGen=0;
  bool pinned=false; Button pinButton; System.Windows.Shapes.Path notchShape; Border shadowNear, shadowFar; Grid outerGrid;
- int hoverDelay=600; bool hoverOn=true; string saveDir=null, lidRestore=null; int storageVersion=0; bool settingsOpen=false; KeepAwakeSession keepAwake;
+ int hoverDelay=600; bool hoverOn=true; string saveDir=null, lidRestore=null, cleanRestore=null, cleanBg="black"; int storageVersion=0; bool settingsOpen=false, cleanDesktop=false; KeepAwakeSession keepAwake; CleanDesktopSession cleanDesktopSession;
  Border confirmView; TextBlock confirmTitle, confirmBody, confirmHint; DockPanel confirmButtons; Button confirmPrimaryBtn; bool confirmOpen=false; string closeTarget=null;
  Color background=Palette.DefaultBackground; readonly List<KeyValuePair<Color,Border>> bgRings=new List<KeyValuePair<Color,Border>>(); Button customBgBtn;
  static readonly string[][] BgPresets={ new[]{"#0F1013","曜石黑"}, new[]{"#1C1D21","石墨灰"}, new[]{"#0E1522","午夜蓝"}, new[]{"#0E1A15","墨绿"}, new[]{"#1A1411","暖咖"}, new[]{"#F4F3EF","纸白（浅色）"} };
@@ -88,13 +88,15 @@ partial class MainWindow : Window {
  // 预览里的选择：按住拖过几行就选中这些行，可以复制成纯文字或 Markdown 原文。
  Border previewPage; int selFrom=-1, selTo=-1, pressLine=-1, pressCaret=-1, pressAnchor=-1; bool pressArmed=false, selecting=false; Point pressAt;
  StackPanel selBar; Border selPill; TextBlock selInfo;
- Border settingsView; Button hoverOnBtn, hoverOffBtn, minusBtn, plusBtn, resetSaveBtn, resetPlaceBtn, resetSizeBtn; TextBlock hoverValue, savePathText;
+ Border settingsView; Button hoverOnBtn, hoverOffBtn, minusBtn, plusBtn, resetSaveBtn, resetPlaceBtn, resetSizeBtn, cleanBlackBtn, cleanWhiteBtn, cleanKeepBtn; TextBlock hoverValue, savePathText, cleanBgName;
 
  public MainWindow() {
   Directory.CreateDirectory(dir);
   try { KeepAwake.RestoreFromSettings(dir); } catch {} // 上次异常退出留下的合盖记录，启动时先恢复
+  try { CleanDesktop.RestoreFromSettings(dir); } catch {} // 上次异常退出留下的干净桌面记录，启动时也先恢复
   LoadSettings();
   keepAwake=new KeepAwakeSession(KeepAwake.Native,()=>lidRestore,SetLidRestore);
+  cleanDesktopSession=new CleanDesktopSession(CleanDesktop.Native,()=>cleanRestore,SetCleanRestore,()=>cleanBg);
   Palette.SetBackground(background); Palette.SetAccent(accent);
   // 只放窗口级资源：应用级资源里的画刷会被冻结，之后无法换色
   ThemeResources();
@@ -142,7 +144,7 @@ partial class MainWindow : Window {
   panel.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star) });
 
   // 第一行：左边是编辑 / 预览 / 脑图切换，右边从历史版本到收起（用户要求，2026-11-09）：
-  // 历史版本、保持唤醒、设置 | 固定、全屏、收起。右组按视觉顺序加进 StackPanel，Tab 顺序也一致。
+  // 历史版本、干净桌面、保持唤醒、设置 | 固定、全屏、收起。右组按视觉顺序加进 StackPanel，Tab 顺序也一致。
   var header=headerRow=new DockPanel { LastChildFill=false, Margin=new Thickness(0,10,0,10), Background=Brushes.Transparent }; panel.Children.Add(header); Draggable(header,false,false,null);
   var seg=new Border { Background=Palette.Surface, CornerRadius=new CornerRadius(8), Padding=new Thickness(2) };
   var segRow=new StackPanel { Orientation=Orientation.Horizontal }; seg.Child=segRow;
@@ -155,6 +157,9 @@ partial class MainWindow : Window {
   // 历史版本入口，和咖啡杯、设置同一种图标按钮；面板已打开时再点就关闭，草稿（未落盘）时禁用。
   historyButton=Ui.Button(LineIcon.Make(LineIcon.History),"历史版本"); historyButton.Width=30; historyButton.Padding=new Thickness(0); historyButton.Margin=new Thickness(0,0,2,0); historyButton.Foreground=Palette.Muted; ToolTipService.SetShowOnDisabled(historyButton,true);
   historyButton.Click+=(s,e)=> { if(historyOpen) CloseHistory(); else OpenHistory(currentNote); }; headerActions.Children.Add(historyButton);
+  // 干净桌面：和咖啡杯同一种图标按钮；关着是 Muted，开启时 AccentBg 底 + Accent 色。
+  cleanButton=Ui.Button(LineIcon.Make(LineIcon.CleanDesktop),"干净桌面：收起桌面图标，背景换成纯黑（录屏时用）"); cleanButton.Width=30; cleanButton.Padding=new Thickness(0); cleanButton.Margin=new Thickness(0,0,2,0); cleanButton.Foreground=Palette.Muted;
+  cleanButton.Click+=(s,e)=>ToggleCleanDesktop(); headerActions.Children.Add(cleanButton); ShowCleanDesktopState();
   sleepButton=Ui.Button(null,""); sleepButton.Width=30; sleepButton.Padding=new Thickness(0); sleepButton.Margin=new Thickness(0,0,2,0); sleepButton.Click+=(s,e)=>ToggleSleep(); headerActions.Children.Add(sleepButton); ShowSleepState();
   settingsButton=Ui.Button(LineIcon.Make(LineIcon.Settings),"设置"); settingsButton.Width=30; settingsButton.Padding=new Thickness(0); settingsButton.Foreground=Palette.Muted; settingsButton.Click+=(s,e)=> { if(settingsOpen) CloseSettings(); else OpenSettings(); }; headerActions.Children.Add(settingsButton);
   // 分隔线：和标签行放不下时的分隔线同一写法，把“笔记相关”和“窗口相关”两组按钮分开。
@@ -385,6 +390,16 @@ partial class MainWindow : Window {
   sleepButton.Content=LineIcon.Make(awake?LineIcon.CupSteam:LineIcon.Cup,null,16); // 两种状态杯身位置不变
   sleepButton.Background=awake?Palette.AccentBg:Brushes.Transparent; sleepButton.Foreground=awake?Palette.Accent:Palette.Muted;
   sleepButton.ToolTip=awake?"保持唤醒中：系统不会自动睡眠，合上盖子也继续运行；点击恢复":"保持唤醒：阻止系统自动睡眠，合上盖子也继续运行";
+ }
+ void ShowCleanDesktopState() {
+  if(cleanButton==null) return;
+  // 关着时提示里写明当前会换成什么背景；“保持当前壁纸”就不提背景。
+  string tip=cleanDesktop?"干净桌面中：点击恢复桌面图标和壁纸":
+   cleanBg=="keep"?"干净桌面：收起桌面图标（录屏时用）":
+   "干净桌面：收起桌面图标，背景换成"+(cleanBg=="white"?"纯白":"纯黑")+"（录屏时用）";
+  cleanButton.Background=cleanDesktop?Palette.AccentBg:Brushes.Transparent;
+  cleanButton.Foreground=cleanDesktop?Palette.Accent:Palette.Muted;
+  cleanButton.ToolTip=tip;
  }
  static void Choose(Button b,bool on) { b.Background=on?Palette.Raised:Brushes.Transparent; b.Foreground=on?Palette.Text:Palette.Muted; }
 }

@@ -53,7 +53,7 @@ static class CrashLog {
  }
 
  internal static void Install(Application app) {
-  AppDomain.CurrentDomain.UnhandledException+=(s,e)=> { Write(e.ExceptionObject as Exception,"background thread",DateTime.Now,Folders()); RestoreLidOnce(); };
+  AppDomain.CurrentDomain.UnhandledException+=(s,e)=> { Write(e.ExceptionObject as Exception,"background thread",DateTime.Now,Folders()); RestoreLidOnce(); RestoreCleanOnce(); };
   app.DispatcherUnhandledException+=(s,e)=> { e.Handled=true; Fail(e.Exception,"UI thread"); };
   Forms.Application.ThreadException+=(s,e)=>Fail(e.Exception,"tray"); // 通知区域图标和它的菜单走 WinForms 的消息处理
  }
@@ -66,9 +66,17 @@ static class CrashLog {
   try { KeepAwake.RestoreFromSettings(MainWindow.DataDir()); } catch {}
  }
 
+ // 崩溃时也尽力恢复干净桌面（图标、壁纸、背景色）；同样只试一次。
+ static bool cleanRestoreTried;
+ static void RestoreCleanOnce() {
+  if(cleanRestoreTried) return;
+  cleanRestoreTried=true;
+  try { CleanDesktop.RestoreFromSettings(MainWindow.DataDir()); } catch {}
+ }
+
  static void Fail(Exception ex,string source) {
   string path=Write(ex,source,DateTime.Now,Folders());
-  RestoreLidOnce();
+  RestoreLidOnce(); RestoreCleanOnce();
   if(reporting) Environment.Exit(1); // 显示提示时又出错：不再弹窗，直接退出
   reporting=true;
   try {

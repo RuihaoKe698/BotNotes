@@ -30,6 +30,8 @@ partial class MainWindow {
   public Color Accent=Palette.DefaultAccent, Background=Palette.DefaultBackground;
   public string SaveDir=null;
   public string LidRestore=null;
+  public string CleanRestore=null;
+  public string CleanBg="black";
   public int StorageVersion=0;
  }
  internal static SettingsData ParseSettings(string[] rawLines,string dataDir) {
@@ -53,6 +55,8 @@ partial class MainWindow {
    else if(k=="saveDir" && v.Length>0) s.SaveDir=v;
    else if(k=="archiveDir" && v.Length>0) legacyArchive=v;
    else if(k=="lidRestore") { LidRestoreRecord r; if(LidRestoreRecord.TryParse(v,out r)) s.LidRestore=r.ToString(); }
+   else if(k=="cleanRestore") { CleanRestoreRecord r; if(CleanRestoreRecord.TryParse(v,out r)) s.CleanRestore=r.ToString(); }
+   else if(k=="cleanBg" && (v=="black" || v=="white" || v=="keep")) s.CleanBg=v;
    else if(k=="storage" && int.TryParse(v,out n)) s.StorageVersion=n;
   }
   // 没有 saveDir 时沿用旧的 archiveDir（用户自定义过归档位置）；否则由 SaveDir() 给默认值。
@@ -65,6 +69,8 @@ partial class MainWindow {
   var list=new System.Collections.Generic.List<string> { "hoverEnabled="+(s.HoverEnabled?"1":"0"), "hoverDelayMs="+s.HoverDelayMs, "saveDir="+(s.SaveDir??""), "pinned="+(s.Pinned?"1":"0"), "botSize="+s.BotSize, "fontSize="+s.FontSize, "accent="+Palette.ToHex(s.Accent), "background="+Palette.ToHex(s.Background),
    "panelLeft="+pos(s.PanelLeft), "panelTop="+pos(s.PanelTop), "dotX="+pos(s.DotX), "dotY="+pos(s.DotY), "panelW="+pos(s.PanelW), "panelH="+pos(s.PanelH) };
   if(!string.IsNullOrEmpty(s.LidRestore)) list.Add("lidRestore="+s.LidRestore);
+  if(!string.IsNullOrEmpty(s.CleanRestore)) list.Add("cleanRestore="+s.CleanRestore);
+  list.Add("cleanBg="+(s.CleanBg=="white" || s.CleanBg=="keep"?s.CleanBg:"black"));
   if(s.StorageVersion>=2) list.Add("storage=2");
   return list.ToArray();
  }
@@ -81,14 +87,14 @@ partial class MainWindow {
  void LoadSettings() {
   try {
    var s=ReadSettingsFile(dir); if(s==null) return;
-   hoverDelay=s.HoverDelayMs; panelLeft=s.PanelLeft; panelTop=s.PanelTop; dotX=s.DotX; dotY=s.DotY; prefW=s.PanelW; prefH=s.PanelH; hoverOn=s.HoverEnabled; pinned=s.Pinned; dotSize=s.BotSize; fontStep=s.FontSize; accent=s.Accent; background=s.Background; saveDir=s.SaveDir; lidRestore=s.LidRestore; storageVersion=s.StorageVersion;
+   hoverDelay=s.HoverDelayMs; panelLeft=s.PanelLeft; panelTop=s.PanelTop; dotX=s.DotX; dotY=s.DotY; prefW=s.PanelW; prefH=s.PanelH; hoverOn=s.HoverEnabled; pinned=s.Pinned; dotSize=s.BotSize; fontStep=s.FontSize; accent=s.Accent; background=s.Background; saveDir=s.SaveDir; lidRestore=s.LidRestore; cleanRestore=s.CleanRestore; cleanBg=s.CleanBg; storageVersion=s.StorageVersion;
   } catch {}
  }
  bool SaveSettings(bool quiet=false) {
   try {
    double panelLeft=this.panelLeft, panelTop=this.panelTop, dotX=this.dotX, dotY=this.dotY; // 全屏时记的是全屏前的位置
    if(fullscreen && beforeFull!=null) { panelLeft=beforeFull[0]; panelTop=beforeFull[1]; dotX=beforeFull[4]; dotY=beforeFull[5]; }
-   var s=new SettingsData { HoverEnabled=hoverOn, HoverDelayMs=hoverDelay, SaveDir=saveDir, StorageVersion=storageVersion, Pinned=pinned, BotSize=dotSize, FontSize=fontStep, Accent=accent, Background=background, PanelLeft=panelLeft, PanelTop=panelTop, DotX=dotX, DotY=dotY, PanelW=prefW, PanelH=prefH, LidRestore=lidRestore };
+   var s=new SettingsData { HoverEnabled=hoverOn, HoverDelayMs=hoverDelay, SaveDir=saveDir, StorageVersion=storageVersion, Pinned=pinned, BotSize=dotSize, FontSize=fontStep, Accent=accent, Background=background, PanelLeft=panelLeft, PanelTop=panelTop, DotX=dotX, DotY=dotY, PanelW=prefW, PanelH=prefH, LidRestore=lidRestore, CleanRestore=cleanRestore, CleanBg=cleanBg };
    WriteSettingsFile(dir,s);
    return true;
   } catch(Exception ex) { if(!quiet) Msg("设置保存失败："+ex.Message); return false; }
@@ -171,6 +177,14 @@ partial class MainWindow {
   }
   customColorBtn=Secondary("自定义…","选择任意颜色"); customColorBtn.Margin=new Thickness(8,0,0,0); customColorBtn.Click+=(s,e)=>PickAccent(); themeRow.Children.Add(customColorBtn);
   theme.Children.Add(themeRow);
+  // 干净桌面背景：三段切换，写法和上面的两段开关一致；开启期间改了，下次开启才生效。
+  var cleanLabel=rowLabel("干净桌面背景",14); cleanBgName=cleanLabel; theme.Children.Add(cleanLabel);
+  var cleanSeg=new Border { Background=Palette.Panel, BorderBrush=Palette.Line, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(8), Padding=new Thickness(2), HorizontalAlignment=HorizontalAlignment.Left };
+  var cleanRow=new StackPanel { Orientation=Orientation.Horizontal }; cleanSeg.Child=cleanRow;
+  cleanBlackBtn=Ui.Button("纯黑","收起桌面图标，背景换成纯黑",new CornerRadius(6)); cleanBlackBtn.Height=26; cleanBlackBtn.Click+=(s,e)=>SetCleanBg("black"); cleanRow.Children.Add(cleanBlackBtn);
+  cleanWhiteBtn=Ui.Button("纯白","收起桌面图标，背景换成纯白",new CornerRadius(6)); cleanWhiteBtn.Height=26; cleanWhiteBtn.Click+=(s,e)=>SetCleanBg("white"); cleanRow.Children.Add(cleanWhiteBtn);
+  cleanKeepBtn=Ui.Button("保持当前壁纸","只收起桌面图标，不改壁纸和背景色",new CornerRadius(6)); cleanKeepBtn.Height=26; cleanKeepBtn.Click+=(s,e)=>SetCleanBg("keep"); cleanRow.Children.Add(cleanKeepBtn);
+  theme.Children.Add(cleanSeg);
   var sizeLine=new Grid { Margin=new Thickness(0,14,0,0), HorizontalAlignment=HorizontalAlignment.Left }; sizeLine.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto }); sizeLine.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });
   var sizeLeft=new StackPanel { VerticalAlignment=VerticalAlignment.Center }; sizeLeft.Children.Add(new TextBlock { Text="小机器人大小", Foreground=Palette.Text, FontSize=12.5, Margin=new Thickness(0,0,0,6) });
   var sizeRow=new StackPanel { Orientation=Orientation.Horizontal }; sizeLeft.Children.Add(sizeRow); sizeLine.Children.Add(sizeLeft);
@@ -197,6 +211,8 @@ partial class MainWindow {
  }
  static string PresetName(string[][] list,Color c) { foreach(var p in list) if((Color)ColorConverter.ConvertFromString(p[0])==c) return p[1]; return "自定义"; }
  void StepHover(int ms) { hoverDelay=Math.Max(0,Math.Min(3000,hoverDelay+ms)); SaveSettings(); UpdateSettingsView(); }
+ // 干净桌面的背景只写进设置；开关正开着时不去动桌面，下次开启再生效。
+ void SetCleanBg(string value) { if(value!="black" && value!="white" && value!="keep") return; cleanBg=value; SaveSettings(); UpdateSettingsView(); }
  static StackPanel CustomSwatch(Color c) {
   var row=new StackPanel { Orientation=Orientation.Horizontal };
   row.Children.Add(new System.Windows.Shapes.Ellipse { Width=12, Height=12, Fill=new SolidColorBrush(c), Stroke=Palette.Text, StrokeThickness=1.2, Margin=new Thickness(0,0,7,0), VerticalAlignment=VerticalAlignment.Center });
@@ -249,6 +265,9 @@ partial class MainWindow {
   foreach(var pair in bgRings) { bool on=pair.Key==background; if(on) bgPreset=true; pair.Value.Visibility=on?Visibility.Visible:Visibility.Hidden; }
   customBgBtn.Content=bgPreset?(object)"自定义…":CustomSwatch(background);
   ((Run)bgName.Tag).Text=" · "+PresetName(BgPresets,background); ((Run)accentName.Tag).Text=" · "+PresetName(Presets,accent);
+  ((Run)cleanBgName.Tag).Text=" · "+(cleanBg=="white"?"纯白":cleanBg=="keep"?"保持当前壁纸":"纯黑");
+  Choose(cleanBlackBtn,cleanBg=="black"); Choose(cleanWhiteBtn,cleanBg=="white"); Choose(cleanKeepBtn,cleanBg=="keep");
+  ShowCleanDesktopState(); // 关闭状态的悬停提示跟着背景设置变
   Choose(hoverOnBtn,hoverOn); Choose(hoverOffBtn,!hoverOn);
   hoverValue.Text=hoverDelay==0?"立即":(hoverDelay/1000.0).ToString("0.0")+" 秒"; hoverValue.Opacity=hoverOn?1:0.4;
   minusBtn.IsEnabled=hoverOn && hoverDelay>0; plusBtn.IsEnabled=hoverOn && hoverDelay<3000;

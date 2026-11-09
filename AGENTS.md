@@ -18,6 +18,7 @@ WPF note app for Windows, C# with no XAML. Formerly NotchNotes for Windows, then
 - Never write to the real “文档” folder in tests. Point `MainWindow.DocumentsRoot` at a temp directory so the default save location is temporary.
 - Never touch the real autostart keys (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and `...\Explorer\StartupApproved\Run`) in tests. Use a throwaway key under `HKCU\Software\BotNotesTests\<guid>` and delete it afterwards.
 - Tests must never read or write the real power settings (LIDACTION and the like) and must not call `powercfg`; go through the replaceable entry point and use an in-memory fake.
+- Tests must never change the real desktop icons, wallpaper, or background color; go through the replaceable entry point and use an in-memory fake.
 - Do not start BotNotes on the user's desktop, do not send synthetic mouse or keyboard input, and do not kill a running BotNotes. Test in-process.
 - When run from the Claude desktop app (an MSIX package), `%LOCALAPPDATA%` for child processes is redirected to `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\...`.
 

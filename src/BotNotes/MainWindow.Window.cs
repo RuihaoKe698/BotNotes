@@ -385,6 +385,24 @@ partial class MainWindow {
   if(SaveSettings(true)) return true;
   lidRestore=old; return false;
  }
+ // 干净桌面：开启时先记原状态再收起图标、换背景；关闭时按记录恢复。失败静默，开关照常切换。
+ void ToggleCleanDesktop() {
+  if(!cleanDesktop) {
+   cleanDesktop=true;
+   if(cleanDesktopSession!=null) cleanDesktopSession.Enable();
+  } else StopCleanDesktop();
+  ShowCleanDesktopState();
+ }
+ void StopCleanDesktop() {
+  cleanDesktop=false;
+  if(cleanDesktopSession!=null) cleanDesktopSession.Restore();
+ }
+ // 记录或清除 cleanRestore，立即写盘；失败时把内存里的值还原，避免和文件不一致。
+ bool SetCleanRestore(string value) {
+  string old=cleanRestore; cleanRestore=value;
+  if(SaveSettings(true)) return true;
+  cleanRestore=old; return false;
+ }
  // 出错退出前收起通知区域图标，免得留下一个点了没反应的图标。
  internal void HideTray() { if(tray!=null) { tray.Visible=false; tray.Dispose(); } }
  void Quit() {
@@ -395,7 +413,7 @@ partial class MainWindow {
    if(!Ask("当前内容没能保存。如果需要，请先把要保留的文字复制出来。","放弃未保存的更改并退出？","放弃并退出",true)) return;
   }
   RenameAllAtOpportunity(); SnapshotCurrentNote(); SaveTabOrder(); SaveFolds();
-  StopKeepAwake(); tray.Visible=false; tray.Dispose(); quitting=true; Close(); Application.Current.Shutdown();
+  StopKeepAwake(); StopCleanDesktop(); tray.Visible=false; tray.Dispose(); quitting=true; Close(); Application.Current.Shutdown();
  }
 }
 }
