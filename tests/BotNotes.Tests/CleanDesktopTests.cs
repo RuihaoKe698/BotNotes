@@ -68,6 +68,27 @@ namespace BotNotes.Tests
     Wallpaper = enabled;
     return true;
    }
+
+   // 桌面整理类软件的图标层：类名 → 是否可见。
+   public readonly Dictionary<string, bool> Layers = new Dictionary<string, bool>();
+   public bool FailLayersWrite;
+   public int SetLayersCalls;
+
+   public bool TryGetOverlayLayers(out string[] classNames)
+   {
+    classNames = Layers.Where(p => p.Value).Select(p => p.Key).ToArray();
+    return true;
+   }
+
+   public bool SetOverlayLayersVisible(string[] classNames, bool visible)
+   {
+    SetLayersCalls++;
+    Log.Add((visible ? "show-layers:" : "hide-layers:") + string.Join("|", classNames));
+    if (FailLayersWrite) return false;
+    foreach (var name in classNames)
+     if (Layers.ContainsKey(name)) Layers[name] = visible;
+    return true;
+   }
   }
 
   // 和 MainWindow.SetCleanRestore 一样：先改内存里的值，写盘成功才算数。
@@ -451,6 +472,64 @@ namespace BotNotes.Tests
     Assert.False(CleanDesktop.RestoreFromSettings(desktop, sb.BotNotesDir));
     Assert.Empty(log);
    }
+  }
+
+  [Fact]
+  public void Enable_also_hides_a_desktop_organizer_layer_after_saving()
+  {
+   var h = new Harness("black", true, 0x1C2D3E, true);
+   h.Desktop.Layers["TXMiniSkin"] = true;
+   h.Desktop.Layers["HiddenAlready"] = false;
+
+   Assert.True(h.Session().Enable());
+
+   Assert.Equal("icons:1,bg:1C2D3E,wall:1,layers:TXMiniSkin", h.Store.Record);
+   Assert.False(h.Desktop.Layers["TXMiniSkin"]);
+   Assert.False(h.Desktop.Layers["HiddenAlready"]);
+   Assert.True(h.Log.IndexOf("save:icons:1,bg:1C2D3E,wall:1,layers:TXMiniSkin") < h.Log.IndexOf("hide-layers:TXMiniSkin"));
+  }
+
+  [Fact]
+  public void Enable_with_only_an_organizer_layer_still_counts_as_a_change()
+  {
+   var h = new Harness("keep", false, 0x1C2D3E, true);
+   h.Desktop.Layers["TXMiniSkin"] = true;
+
+   Assert.True(h.Session().Enable());
+
+   Assert.Equal("layers:TXMiniSkin", h.Store.Record);
+   Assert.False(h.Desktop.Layers["TXMiniSkin"]);
+  }
+
+  [Fact]
+  public void Restore_shows_the_organizer_layer_again_and_keeps_the_record_if_that_fails()
+  {
+   var h = new Harness("keep", false, 0x1C2D3E, true);
+   h.Desktop.Layers["TXMiniSkin"] = false;
+   h.Store.Record = "icons:1,layers:TXMiniSkin";
+
+   Assert.True(h.Session().Restore());
+   Assert.True(h.Desktop.Layers["TXMiniSkin"]);
+   Assert.True(h.Desktop.IconsVisible);
+   Assert.Null(h.Store.Record);
+
+   var failing = new Harness("keep", false, 0x1C2D3E, true);
+   failing.Desktop.Layers["TXMiniSkin"] = false;
+   failing.Desktop.FailLayersWrite = true;
+   failing.Store.Record = "layers:TXMiniSkin";
+
+   Assert.False(failing.Session().Restore());
+   Assert.Equal("layers:TXMiniSkin", failing.Store.Record);
+  }
+
+  [Fact]
+  public void Layers_field_parses_and_drops_bad_class_names()
+  {
+   CleanRestoreRecord record;
+   Assert.True(CleanRestoreRecord.TryParse("layers:TXMiniSkin|Other|TXMiniSkin", out record));
+   Assert.Equal("layers:TXMiniSkin|Other", record.ToString());
+   Assert.False(CleanRestoreRecord.TryParse("layers:", out record));
+   Assert.False(CleanRestoreRecord.TryParse("layers:| ", out record));
   }
 
   [Fact]

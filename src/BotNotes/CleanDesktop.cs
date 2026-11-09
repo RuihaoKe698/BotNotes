@@ -13,6 +13,9 @@ namespace NotchNotesWindows {
   bool TryGetWallpaperEnabled(out bool enabled);
   bool SetBackgroundColor(uint color); // 0xRRGGBB
   bool SetWallpaperEnabled(bool enabled);
+  // 桌面整理类软件（如腾讯桌面整理）挂在桌面里、自己画图标的窗口；按窗口类名识别，只返回当前可见的。
+  bool TryGetOverlayLayers(out string[] classNames);
+  bool SetOverlayLayersVisible(string[] classNames,bool visible);
  }
 
  // 真实的桌面实现：桌面图标走 SHELLDLL_DefView 的“显示桌面图标”命令，背景走 IDesktopWallpaper。
@@ -29,6 +32,11 @@ namespace NotchNotesWindows {
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
   [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hWnd,uint msg,IntPtr wParam,IntPtr lParam);
   [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern bool SystemParametersInfo(uint action,uint param,[Out] StringBuilder data,uint winIni);
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent,EnumWindowsProc callback,IntPtr lParam);
+  [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hWnd,uint flags);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd,out uint processId);
+  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd,int command);
+  const uint GA_PARENT=1; const int SW_HIDE=0, SW_SHOWNA=8;
 
   [StructLayout(LayoutKind.Sequential)] struct DesktopRect { public int Left, Top, Right, Bottom; }
   enum DesktopWallpaperPosition { Center=0, Tile=1, Stretch=2, Fit=3, Fill=4, Span=5 }
@@ -113,6 +121,55 @@ namespace NotchNotesWindows {
    } catch { return false; }
   }
 
+  static string ClassOf(IntPtr h) {
+   var name=new StringBuilder(256);
+   return GetClassName(h,name,name.Capacity)>0?name.ToString():"";
+  }
+  static uint ProcessOf(IntPtr h) { uint pid; GetWindowThreadProcessId(h,out pid); return pid; }
+
+  // 挂在桌面（放 SHELLDLL_DefView 的 Progman / WorkerW）里、属于资源管理器以外进程的最外层窗口。
+  // 跳过 WorkerW 里面的窗口：那是动态壁纸软件放壁纸的地方，不能当成图标层藏掉。
+  static List<IntPtr> FindOverlayWindows() {
+   var result=new List<IntPtr>();
+   IntPtr view=FindDefView(); if(view==IntPtr.Zero) return result;
+   IntPtr host=GetAncestor(view,GA_PARENT); if(host==IntPtr.Zero) return result;
+   uint shell=ProcessOf(view);
+   EnumChildWindows(host,(h,l)=> {
+    if(ProcessOf(h)==shell) return true;
+    bool keep=true;
+    for(IntPtr p=GetAncestor(h,GA_PARENT); p!=IntPtr.Zero && p!=host; p=GetAncestor(p,GA_PARENT)) {
+     if(ClassOf(p)=="WorkerW" || ProcessOf(p)!=shell) { keep=false; break; }
+    }
+    if(keep) result.Add(h);
+    return true;
+   },IntPtr.Zero);
+   return result;
+  }
+
+  public bool TryGetOverlayLayers(out string[] classNames) {
+   classNames=new string[0];
+   try {
+    var names=new List<string>();
+    foreach(IntPtr h in FindOverlayWindows()) {
+     if(!IsWindowVisible(h)) continue;
+     string name=ClassOf(h);
+     if(name.Length>0 && !names.Contains(name)) names.Add(name);
+    }
+    classNames=names.ToArray(); return true;
+   } catch { return false; }
+  }
+
+  public bool SetOverlayLayersVisible(string[] classNames,bool visible) {
+   try {
+    if(classNames==null || classNames.Length==0) return true;
+    foreach(IntPtr h in FindOverlayWindows()) {
+     if(Array.IndexOf(classNames,ClassOf(h))<0 || IsWindowVisible(h)==visible) continue;
+     ShowWindow(h,visible?SW_SHOWNA:SW_HIDE);
+    }
+    return true; // 那个软件已经退出、找不到窗口时也算恢复完成
+   } catch { return false; }
+  }
+
   public bool TryGetBackgroundColor(out uint color) {
    color=0;
    try {
@@ -147,11 +204,19 @@ namespace NotchNotesWindows {
   }
  }
 
- // settings.ini 里的 cleanRestore=icons:1,bg:RRGGBB,wall:1；只写这次动到的类别，字段可缺省；壁纸原来关着时记 wall:0。
+ // settings.ini 里的 cleanRestore=icons:1,bg:RRGGBB,wall:1,layers:类名|类名；只写这次动到的类别，字段可缺省；壁纸原来关着时记 wall:0。
  internal sealed class CleanRestoreRecord {
   internal bool HasIcons, IconsVisible;
   internal bool HasBackground; internal uint BackgroundColor; // 0xRRGGBB
   internal bool HasWallpaper, WallpaperEnabled;
+  internal string[] Layers; // 被收起的桌面整理类窗口的类名；null 表示没动
+
+  internal bool HasLayers { get { return Layers!=null && Layers.Length>0; } }
+
+  // 类名里不能有记录用的分隔符，有的话这个窗口就不动它。
+  internal static bool IsStorableClassName(string name) {
+   return !string.IsNullOrEmpty(name) && name.IndexOfAny(new[] { ',',':','|','\r','\n' })<0 && name.Trim()==name;
+  }
 
   internal static bool TryParse(string text,out CleanRestoreRecord record) {
    record=null;
@@ -167,6 +232,10 @@ namespace NotchNotesWindows {
      if(value.Length==6 && uint.TryParse(value,NumberStyles.HexNumber,CultureInfo.InvariantCulture,out color)) { parsed.HasBackground=true; parsed.BackgroundColor=color; any=true; }
     } else if(string.Equals(key,"wall",StringComparison.OrdinalIgnoreCase)) {
      if(value=="0" || value=="1") { parsed.HasWallpaper=true; parsed.WallpaperEnabled=value=="1"; any=true; }
+    } else if(string.Equals(key,"layers",StringComparison.OrdinalIgnoreCase)) {
+     var names=new List<string>();
+     foreach(var name in value.Split('|')) if(IsStorableClassName(name) && !names.Contains(name)) names.Add(name);
+     if(names.Count>0) { parsed.Layers=names.ToArray(); any=true; }
     }
    }
    if(!any) return false;
@@ -178,6 +247,7 @@ namespace NotchNotesWindows {
    if(HasIcons) parts.Add("icons:"+(IconsVisible?"1":"0"));
    if(HasBackground) parts.Add("bg:"+BackgroundColor.ToString("X6",CultureInfo.InvariantCulture));
    if(HasWallpaper) parts.Add("wall:"+(WallpaperEnabled?"1":"0"));
+   if(HasLayers) parts.Add("layers:"+string.Join("|",Layers));
    return string.Join(",",parts.ToArray());
   }
  }
@@ -209,6 +279,16 @@ namespace NotchNotesWindows {
     if(desktop.TryGetIconsVisible(out iconsVisible) && iconsVisible) { record.HasIcons=true; record.IconsVisible=true; changed=true; }
    } catch {}
 
+   // 桌面整理类软件自己画的图标层：可见的都记下类名，一起收起。
+   try {
+    string[] layers;
+    if(desktop.TryGetOverlayLayers(out layers) && layers!=null) {
+     var names=new List<string>();
+     foreach(var name in layers) if(CleanRestoreRecord.IsStorableClassName(name) && !names.Contains(name)) names.Add(name);
+     if(names.Count>0) { record.Layers=names.ToArray(); changed=true; }
+    }
+   } catch {}
+
    // 背景：只有设置为纯黑 / 纯白时才改；保持当前壁纸时完全不碰背景。
    string mode=null;
    try { mode=readBackground==null?null:readBackground(); } catch {}
@@ -229,6 +309,7 @@ namespace NotchNotesWindows {
    try { if(!writeRecord(record.ToString())) return false; } catch { return false; } // 先落盘，再改桌面
 
    if(record.HasIcons) { try { desktop.SetIconsVisible(false); } catch {} }
+   if(record.HasLayers) { try { desktop.SetOverlayLayersVisible(record.Layers,false); } catch {} }
    if(hasTarget && record.HasBackground) { try { desktop.SetBackgroundColor(target); } catch {} }
    if(record.HasWallpaper && record.WallpaperEnabled) { try { desktop.SetWallpaperEnabled(false); } catch {} }
    return true;
@@ -246,6 +327,10 @@ namespace NotchNotesWindows {
    if(record.HasIcons && record.IconsVisible) {
     bool done=false; try { done=desktop.SetIconsVisible(true); } catch { done=false; }
     ok=done;
+   }
+   if(record.HasLayers) {
+    bool done=false; try { done=desktop.SetOverlayLayersVisible(record.Layers,true); } catch { done=false; }
+    ok=done && ok;
    }
    if(record.HasBackground) {
     bool done=false; try { done=desktop.SetBackgroundColor(record.BackgroundColor); } catch { done=false; }
