@@ -90,7 +90,7 @@ partial class MainWindow : Window {
  // 预览里的选择：按住拖过几行就选中这些行，可以复制成纯文字或 Markdown 原文。
  Border previewPage; int selFrom=-1, selTo=-1, pressLine=-1, pressCaret=-1, pressAnchor=-1; bool pressArmed=false, selecting=false; Point pressAt;
  StackPanel selBar; Border selPill; TextBlock selInfo; static readonly string G_Copy=((char)0xE8C8).ToString(), G_Cut=((char)0xE8C6).ToString(), G_Delete=((char)0xE74D).ToString();
- TextBlock shelfHint; Border settingsView; Button hoverOnBtn, hoverOffBtn, minusBtn, plusBtn, resetArchiveBtn, resetPlaceBtn, resetSizeBtn; TextBlock hoverValue, archivePathText;
+ TextBlock shelfHint; FrameworkElement shelfTray; Border settingsView; Button hoverOnBtn, hoverOffBtn, minusBtn, plusBtn, resetArchiveBtn, resetPlaceBtn, resetSizeBtn; TextBlock hoverValue, archivePathText;
 
  public MainWindow() {
   Directory.CreateDirectory(dir);
@@ -152,9 +152,10 @@ partial class MainWindow : Window {
   sleepButton=Ui.Button(null,""); sleepButton.Width=30; sleepButton.Padding=new Thickness(0); sleepButton.Margin=new Thickness(0,0,2,0); sleepButton.Click+=(s,e)=>ToggleSleep(); DockPanel.SetDock(sleepButton,Dock.Right); header.Children.Add(sleepButton); ShowSleepState();
   var seg=new Border { Background=Palette.Surface, CornerRadius=new CornerRadius(8), Padding=new Thickness(2) };
   var segRow=new StackPanel { Orientation=Orientation.Horizontal }; seg.Child=segRow;
-  editTab=Ui.Button("编辑","编辑 Markdown 源码 (Ctrl+E)",new CornerRadius(6)); editTab.Height=26; editTab.Padding=new Thickness(14,0,14,0); editTab.Click+=(s,e)=> { CloseSettings(); SetPreview(false); }; segRow.Children.Add(editTab);
-  previewTab=Ui.Button("预览","查看排版效果，点任意一行即可修改 (Ctrl+E)",new CornerRadius(6)); previewTab.Height=26; previewTab.Padding=new Thickness(14,0,14,0); previewTab.Click+=(s,e)=> { CloseSettings(); SetPreview(true); }; segRow.Children.Add(previewTab);
-  mapTab=Ui.Button("脑图","把标题和列表画成脑图，方便演示和讲解 (Ctrl+M)",new CornerRadius(6)); mapTab.Height=26; mapTab.Padding=new Thickness(14,0,14,0); mapTab.Click+=(s,e)=> { CloseSettings(); SetMap(); }; segRow.Children.Add(mapTab);
+  // 三段都只显示 16px 的自绘线条图标，宽度固定相同，切换时不会因为文字长短跳动；提示文字不变。
+  editTab=Ui.Button(LineIcon.Make(LineIcon.Pencil),"编辑 Markdown 源码 (Ctrl+E)",new CornerRadius(6)); editTab.Height=26; editTab.Width=38; editTab.Padding=new Thickness(0); editTab.Click+=(s,e)=> { CloseSettings(); SetPreview(false); }; segRow.Children.Add(editTab);
+  previewTab=Ui.Button(LineIcon.Make(LineIcon.Book),"查看排版效果，点任意一行即可修改 (Ctrl+E)",new CornerRadius(6)); previewTab.Height=26; previewTab.Width=38; previewTab.Padding=new Thickness(0); previewTab.Click+=(s,e)=> { CloseSettings(); SetPreview(true); }; segRow.Children.Add(previewTab);
+  mapTab=Ui.Button(LineIcon.Make(LineIcon.MindMap),"把标题和列表画成脑图，方便演示和讲解 (Ctrl+M)",new CornerRadius(6)); mapTab.Height=26; mapTab.Width=38; mapTab.Padding=new Thickness(0); mapTab.Click+=(s,e)=> { CloseSettings(); SetMap(); }; segRow.Children.Add(mapTab);
   DockPanel.SetDock(seg,Dock.Left); header.Children.Add(seg);
 
   // 第二行：笔记标签可以横向滚动；新建、打开固定在最右边，标签再多也不会被挤出去。归档在关闭笔记时选。
@@ -163,7 +164,8 @@ partial class MainWindow : Window {
   // 标签放不下时才出现分隔线，说明左边还能滚动。
   tabsEdge=new Border { Width=1, Height=16, Background=Palette.Line, Margin=new Thickness(4,0,4,0), VerticalAlignment=VerticalAlignment.Center, Visibility=Visibility.Collapsed }; actions.Children.Add(tabsEdge);
   var add=tabAdd=Ui.Button(Ui.Icon(G_Add,12),"新建笔记 (Ctrl+N)"); add.Height=28; add.Width=30; add.Padding=new Thickness(0); add.Foreground=Palette.Muted; add.Click+=(s,e)=> { CloseSettings(); NewNote(); }; actions.Children.Add(add);
-  var open=tabOpen=Ui.Button(Ui.IconLabel(G_Open,"打开"),"打开文件（Ctrl+O）：从归档文件夹打开即取回这篇笔记；其他位置的文件只复制进来，原文件不动"); open.Height=28; open.Foreground=Palette.Muted; open.Margin=new Thickness(2,0,0,0); open.Click+=(s,e)=> { CloseSettings(); OpenFiles(); }; actions.Children.Add(open);
+  // 只显示图标，和“新建 +”一样是 30px 宽的图标按钮；提示文字保持不变。UpdateTabEdges 仍按实际宽度扣掉这两个按钮。
+  var open=tabOpen=Ui.Button(Ui.Icon(G_Open,13),"打开文件（Ctrl+O）：从归档文件夹打开即取回这篇笔记；其他位置的文件只复制进来，原文件不动"); open.Height=28; open.Width=30; open.Padding=new Thickness(0); open.Foreground=Palette.Muted; open.Margin=new Thickness(2,0,0,0); open.Click+=(s,e)=> { CloseSettings(); OpenFiles(); }; actions.Children.Add(open);
   // 标签放不下时两头出现 ‹ ›，点一下翻大半屏；被遮住的一侧边缘渐隐，提示那边还有。
   tabNext=Ui.Button(Ui.Icon("",10),"向右翻（也可以在标签上滚动滚轮）"); tabNext.Width=22; tabNext.Height=28; tabNext.Padding=new Thickness(0); tabNext.Foreground=Palette.Muted; tabNext.Focusable=false; tabNext.Visibility=Visibility.Collapsed; tabNext.Click+=(s,e)=>PageTabs(1); DockPanel.SetDock(tabNext,Dock.Right); tabRow.Children.Add(tabNext);
   tabPrev=Ui.Button(Ui.Icon("",10),"向左翻（也可以在标签上滚动滚轮）"); tabPrev.Width=22; tabPrev.Height=28; tabPrev.Padding=new Thickness(0); tabPrev.Foreground=Palette.Muted; tabPrev.Focusable=false; tabPrev.Visibility=Visibility.Collapsed; tabPrev.Margin=new Thickness(0,0,2,0); tabPrev.Click+=(s,e)=>PageTabs(-1); DockPanel.SetDock(tabPrev,Dock.Left); tabRow.Children.Add(tabPrev);
@@ -395,7 +397,8 @@ partial class MainWindow : Window {
  }
  void ShowDropZone() {
   if(dropZone==null) return; bool empty=files.Count==0;
-  dropZone.Visibility=empty?Visibility.Visible:Visibility.Collapsed; dropZone.Stroke=Palette.Rule; dropZone.Fill=Brushes.Transparent;
+  // 空状态下默认不画虚线框，只在拖文件进窗口（dragInside）时露出来；有文件时文件条自己占满。
+  dropZone.Visibility=empty && dragInside?Visibility.Visible:Visibility.Collapsed; dropZone.Stroke=Palette.Rule; dropZone.Fill=Brushes.Transparent;
   shelfCount.Text=empty?"":files.Count.ToString();
  }
  void SetStatus(string text,Brush tone) { if(saveStatus==null) return; saveStatus.Text=text; saveStatus.Foreground=tone==Palette.Warn?Palette.Warn:Palette.Muted; statusDot.Fill=tone; }

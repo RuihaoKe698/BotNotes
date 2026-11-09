@@ -256,9 +256,14 @@ partial class MainWindow {
   return (ext==".png"||ext==".jpg"||ext==".jpeg"||ext==".gif"||ext==".webp"||ext==".bmp"||ext==".heic")?G_Image:G_File;
  }
  void RefreshShelf() {
-  shelf.Children.Clear(); ShowDropZone(); UpdatePresenting();
-  if(files.Count==0) { shelfHint=new TextBlock { Foreground=Palette.Muted, FontSize=12, Margin=new Thickness(12,0,12,0), VerticalAlignment=VerticalAlignment.Center }; shelf.Children.Add(shelfHint); UpdatePresenting(); return; }
-  shelfHint=null;
+  shelf.Children.Clear(); shelfTray=null; shelfHint=null; ShowDropZone(); UpdatePresenting();
+  // 空状态只留一个 16px 的 Muted 线条托盘图标，文字提示和虚线框都不显示；提示文字放在整条的 ToolTip 上。
+  if(files.Count==0) {
+   shelfTray=LineIcon.Make(LineIcon.Tray,null,16); shelfTray.SetValue(TextElement.ForegroundProperty,Palette.Muted); shelfTray.Margin=new Thickness(12,0,12,0);
+   shelf.Children.Add(shelfTray);
+   shelfHint=new TextBlock { Foreground=Palette.Muted, FontSize=12.5, Margin=new Thickness(12,0,12,0), VerticalAlignment=VerticalAlignment.Center, Visibility=Visibility.Collapsed };
+   shelf.Children.Add(shelfHint); UpdatePresenting(); return;
+  }
   foreach(string path in files) {
    string p=path; bool exists=File.Exists(p)||Directory.Exists(p);
    var card=new Border { Background=Palette.Raised, CornerRadius=new CornerRadius(7), Padding=new Thickness(9,0,2,0), Height=30, Margin=new Thickness(0,0,6,0), ToolTip=exists?p+"\n双击打开，拖出到其他应用":"文件不存在或已移动：\n"+p, Opacity=exists?1:0.55, Cursor=Cursors.Hand };

@@ -195,8 +195,12 @@ partial class MainWindow {
   bool slim=files.Count==0 && !dragInside;
   shelfCaption.Visibility=shelfOff || slim?Visibility.Collapsed:Visibility.Visible;
   shelfBorder.Visibility=shelfOff?Visibility.Collapsed:Visibility.Visible;
-  shelfBorder.MinHeight=slim?30:40; shelfBorder.Margin=new Thickness(0,slim?10:0,0,0);
-  if(shelfHint!=null) { shelfHint.Text=slim?"文件暂存 · 拖文件到这里，之后可以再拖到其他应用":"松开鼠标放进暂存区"; shelfHint.FontSize=slim?12:12.5; }
+  shelfBorder.MinHeight=slim?24:40; shelfBorder.Margin=new Thickness(0,slim?10:0,0,0);
+  // 空状态是一条 24px 高的图标条：只显示托盘图标，虚线框收起，提示换成整条悬停提示；拖文件进来时恢复 40px 投放区和“松开…”提示。
+  shelfBorder.ToolTip=slim?"文件暂存：拖文件到这里，之后可以再拖到其他应用":null;
+  if(dropZone!=null && files.Count==0) dropZone.Visibility=dragInside?Visibility.Visible:Visibility.Collapsed;
+  if(shelfTray!=null) shelfTray.Visibility=slim?Visibility.Visible:Visibility.Collapsed;
+  if(shelfHint!=null) { shelfHint.Text=slim?"":"松开鼠标放进暂存区"; shelfHint.FontSize=12.5; shelfHint.Visibility=slim?Visibility.Collapsed:Visibility.Visible; }
   mapHint.Visibility=p || mapRoot==null?Visibility.Collapsed:Visibility.Visible;
   editCard.BorderThickness=new Thickness(0); editCard.CornerRadius=new CornerRadius(0); editCard.Background=p?Palette.Panel:Brushes.Transparent;
   outerBox.Padding=p?new Thickness(0):new Thickness(16,0,16,16);
