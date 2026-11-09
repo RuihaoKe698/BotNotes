@@ -48,15 +48,15 @@ partial class MainWindow {
   // 空笔记：说明 + “去编辑”；这时底栏按钮禁用、操作提示隐藏。
   mapEmpty=new StackPanel { HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center, Margin=new Thickness(24), Visibility=Visibility.Collapsed };
   mapEmpty.Children.Add(new TextBlock { Text="这篇笔记还是空的。写几个标题（#、##）和列表，这里就会画成脑图。", Foreground=Palette.Muted, FontSize=13, TextWrapping=TextWrapping.Wrap, TextAlignment=TextAlignment.Center });
-  var goEdit=Ui.Button(Ui.IconLabel(G_Edit,"去编辑"),"切到编辑 (Ctrl+E)"); goEdit.Height=30; goEdit.Foreground=Palette.Accent; goEdit.HorizontalAlignment=HorizontalAlignment.Center; goEdit.Margin=new Thickness(0,12,0,0); goEdit.Click+=(s,e)=> { if(fullscreen) SetFullscreen(false); SetPreview(false); editor.Focus(); };
+  var goEdit=Ui.Button(Ui.IconLabel(LineIcon.Edit,"去编辑",14),"切到编辑 (Ctrl+E)"); goEdit.Height=30; goEdit.Foreground=Palette.Accent; goEdit.HorizontalAlignment=HorizontalAlignment.Center; goEdit.Margin=new Thickness(0,12,0,0); goEdit.Click+=(s,e)=> { if(fullscreen) SetFullscreen(false); SetPreview(false); editor.Focus(); };
   mapEmpty.Children.Add(goEdit); mapView.Children.Add(mapEmpty);
   mapHint=new TextBlock { Text=MapHintIdle, Foreground=Palette.Muted, Opacity=0.7, FontSize=11, Margin=new Thickness(12,0,0,8), HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Bottom, IsHitTestVisible=false };
   mapView.Children.Add(mapHint);
   // 右上角：平时是“全屏演示”入口；演示时换成“适应窗口”和“退出全屏”。
   var presentRow=new StackPanel { Orientation=Orientation.Horizontal };
   presentProgress=new TextBlock { FontSize=12, Foreground=Palette.Muted, Margin=new Thickness(8,0,8,0), VerticalAlignment=VerticalAlignment.Center, Visibility=Visibility.Collapsed }; presentRow.Children.Add(presentProgress);
-  presentFit=Ui.Button(Ui.IconLabel(G_Fit,"适应窗口"),"缩放到合适大小并居中 (Ctrl+0)"); presentFit.Height=28; presentFit.Focusable=false; presentFit.Foreground=Palette.Muted; presentFit.Visibility=Visibility.Collapsed; presentFit.Click+=(s,e)=> { mapMoved=false; FitMap(); }; presentRow.Children.Add(presentFit);
-  presentBtn=Ui.Button(Ui.IconLabel(G_Full,"全屏演示"),""); presentBtn.Height=28; presentBtn.Focusable=false; presentBtn.Foreground=Palette.Muted; presentBtn.Click+=(s,e)=>TogglePresentation(); presentRow.Children.Add(presentBtn);
+  presentFit=Ui.Button(Ui.IconLabel(LineIcon.Fit,"适应窗口",14),"缩放到合适大小并居中 (Ctrl+0)"); presentFit.Height=28; presentFit.Focusable=false; presentFit.Foreground=Palette.Muted; presentFit.Visibility=Visibility.Collapsed; presentFit.Click+=(s,e)=> { mapMoved=false; FitMap(); }; presentRow.Children.Add(presentFit);
+  presentBtn=Ui.Button(Ui.IconLabel(LineIcon.Present,"全屏演示",14),""); presentBtn.Height=28; presentBtn.Focusable=false; presentBtn.Foreground=Palette.Muted; presentBtn.Click+=(s,e)=>TogglePresentation(); presentRow.Children.Add(presentBtn);
   presentBar=new Border { Child=presentRow, Background=Palette.Raised, CornerRadius=new CornerRadius(8), Padding=new Thickness(2), HorizontalAlignment=HorizontalAlignment.Right, VerticalAlignment=VerticalAlignment.Top, Margin=new Thickness(0,8,8,0) };
   presentBar.MouseEnter+=(s,e)=>presentBar.Opacity=1; presentBar.MouseLeave+=(s,e)=>presentBar.Opacity=Presenting?0.45:1;
   mapView.Children.Add(presentBar);

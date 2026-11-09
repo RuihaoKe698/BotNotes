@@ -193,13 +193,13 @@ partial class MainWindow {
   editCard.BorderThickness=new Thickness(0); editCard.CornerRadius=new CornerRadius(0); editCard.Background=p?Palette.Panel:Brushes.Transparent;
   outerBox.Padding=p?new Thickness(0):new Thickness(16,0,16,16);
   presentFit.Visibility=p && mapRoot!=null?Visibility.Visible:Visibility.Collapsed; presentProgress.Visibility=p && mapRoot!=null?Visibility.Visible:Visibility.Collapsed;
-  presentBtn.Content=Ui.IconLabel(p?G_Unfull:G_Full,p?"退出演示":"全屏演示");
+  presentBtn.Content=Ui.IconLabel(p?LineIcon.ExitPresent:LineIcon.Present,p?"退出演示":"全屏演示",14);
   presentBtn.ToolTip=p?"退出演示（Esc 或 F5）":"全屏演示：一步步展示脑图（F5）";
   presentBar.Margin=p?new Thickness(0,8,16,0):new Thickness(0,8,8,0);
   presentBar.Opacity=p && !presentBar.IsMouseOver?0.45:1;
  }
  void ShowFullscreenState() {
-  fsButton.Content=Ui.Icon(fullscreen?G_Unfull:G_Full,13);
+  fsButton.Content=LineIcon.Make(fullscreen?LineIcon.ExitFullscreen:LineIcon.Fullscreen);
   fsButton.ToolTip=fullscreen?"退出全屏（Esc 或 F11）":"全屏：铺满整个屏幕（F11）";
   fsButton.Background=fullscreen?Palette.AccentBg:Brushes.Transparent; fsButton.Foreground=fullscreen?Palette.Accent:Palette.Muted;
  }

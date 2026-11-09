@@ -120,9 +120,9 @@ partial class MainWindow {
   hoverOnBtn=Ui.Button("开启","鼠标停留时自动展开",new CornerRadius(6)); hoverOnBtn.Height=26; hoverOnBtn.Click+=(s,e)=> { hoverOn=true; SaveSettings(); UpdateSettingsView(); }; segRow.Children.Add(hoverOnBtn);
   hoverOffBtn=Ui.Button("关闭","只在点击时展开",new CornerRadius(6)); hoverOffBtn.Height=26; hoverOffBtn.Click+=(s,e)=> { hoverOn=false; SaveSettings(); UpdateSettingsView(); }; segRow.Children.Add(hoverOffBtn);
   hoverRow.Children.Add(seg);
-  minusBtn=Secondary(Ui.Icon(G_Minus,11),"缩短 0.1 秒"); minusBtn.Width=30; minusBtn.Padding=new Thickness(0); minusBtn.Margin=new Thickness(0); minusBtn.Click+=(s,e)=>StepHover(-100); hoverRow.Children.Add(minusBtn);
+  minusBtn=Secondary(LineIcon.Make(LineIcon.Minus,null,14),"缩短 0.1 秒"); minusBtn.Width=30; minusBtn.Padding=new Thickness(0); minusBtn.Margin=new Thickness(0); minusBtn.Click+=(s,e)=>StepHover(-100); hoverRow.Children.Add(minusBtn);
   hoverValue=new TextBlock { Foreground=Palette.Text, FontSize=13, Width=64, TextAlignment=TextAlignment.Center, VerticalAlignment=VerticalAlignment.Center }; hoverRow.Children.Add(hoverValue);
-  plusBtn=Secondary(Ui.Icon(G_Add,11),"延长 0.1 秒"); plusBtn.Width=30; plusBtn.Padding=new Thickness(0); plusBtn.Margin=new Thickness(0); plusBtn.Click+=(s,e)=>StepHover(100); hoverRow.Children.Add(plusBtn);
+  plusBtn=Secondary(LineIcon.Make(LineIcon.Plus,null,14),"延长 0.1 秒"); plusBtn.Width=30; plusBtn.Padding=new Thickness(0); plusBtn.Margin=new Thickness(0); plusBtn.Click+=(s,e)=>StepHover(100); hoverRow.Children.Add(plusBtn);
   hover.Children.Add(hoverRow); list.Children.Add(hover);
 
   var place=Section("位置和大小","按住小圆点，或按住面板顶部的空白处和“BotNotes”标签，可以拖到别处。拖到屏幕顶边附近会自动贴住。按住面板的左、右、下边或下面两个角拖动，可以改大小；面板在顶部正中时左右一起缩放，保持居中。");
@@ -178,7 +178,7 @@ partial class MainWindow {
   savePathText=new TextBlock { Foreground=Palette.Text, FontSize=12.5, TextTrimming=TextTrimming.CharacterEllipsis }; pathBox.Child=savePathText; save.Children.Add(pathBox);
   save.Children.Add(new TextBlock { Text="新建的笔记存在这里；已有的文件不会移动。", Foreground=Palette.Muted, FontSize=12, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,0,0,10), LineHeight=19 });
   var saveRow=new StackPanel { Orientation=Orientation.Horizontal };
-  var change=Secondary(Ui.IconLabel(G_Folder,"更改…"),"选择新的保存文件夹"); change.Click+=(s,e)=>PickSaveDir(); saveRow.Children.Add(change);
+  var change=Secondary(Ui.IconLabel(LineIcon.Folder,"更改…",16),"选择新的保存文件夹"); change.Click+=(s,e)=>PickSaveDir(); saveRow.Children.Add(change);
   var open=Secondary("打开文件夹","在资源管理器中打开"); open.Click+=(s,e)=>OpenSaveDir(); saveRow.Children.Add(open);
   resetSaveBtn=Ui.Button("恢复默认","改回“文档\\BotNotes”"); resetSaveBtn.Foreground=Palette.Muted; resetSaveBtn.Click+=(s,e)=> { saveDir=null; SaveSettings(); UpdateSettingsView(); }; saveRow.Children.Add(resetSaveBtn);
   save.Children.Add(saveRow); list.Children.Add(save);

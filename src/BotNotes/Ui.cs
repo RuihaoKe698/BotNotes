@@ -20,18 +20,19 @@ namespace NotchNotesWindows {
 class Win32Owner : Forms.IWin32Window { readonly IntPtr h; public Win32Owner(IntPtr h) { this.h=h; } public IntPtr Handle { get { return h; } } }
 
 static class Ui {
- public static readonly FontFamily IconFont=new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets");
  public static readonly FontFamily Mono=new FontFamily("Cascadia Mono, Consolas");
  static Style focusRing;
 
- public static TextBlock Icon(string glyph,double size) {
-  return new TextBlock { Text=glyph, FontFamily=IconFont, FontSize=size, VerticalAlignment=VerticalAlignment.Center, HorizontalAlignment=HorizontalAlignment.Center };
- }
- public static StackPanel IconLabel(string glyph,string text) {
-  var row=new StackPanel { Orientation=Orientation.Horizontal };
-  var icon=Icon(glyph,13); icon.Margin=new Thickness(0,0,6,0); row.Children.Add(icon);
+ // 图标 + 文字：图标用 LineIcon，间距、垂直对齐和以前的字体图标版本一致。
+ public static StackPanel IconLabel(FrameworkElement icon,string text) {
+  icon.Margin=new Thickness(0,0,6,0);
+  var row=new StackPanel { Orientation=Orientation.Horizontal, VerticalAlignment=VerticalAlignment.Center };
+  row.Children.Add(icon);
   row.Children.Add(new TextBlock { Text=text, VerticalAlignment=VerticalAlignment.Center });
   return row;
+ }
+ public static StackPanel IconLabel(string path,string text,double size) {
+  return IconLabel(LineIcon.Make(path,null,size),text);
  }
  // 键盘切换焦点时才显示的绿色描边；鼠标点击不出现。
  static Style FocusRing() {

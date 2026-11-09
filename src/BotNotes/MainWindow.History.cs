@@ -460,7 +460,7 @@ partial class MainWindow {
   var hint=new TextBlock { Text="恢复前会先保存当前内容，恢复错了可以再找回来", Foreground=Palette.Muted, FontSize=12, TextWrapping=TextWrapping.Wrap, LineHeight=18, Margin=new Thickness(12,0,0,0), VerticalAlignment=VerticalAlignment.Center }; footer.Children.Add(hint);
 
   var header=new DockPanel { LastChildFill=true, Margin=new Thickness(0,0,0,12) }; DockPanel.SetDock(header,Dock.Top); dock.Children.Add(header);
-  var close=Ui.Button(Ui.Icon(G_Close,10),"关闭（Esc）"); close.Width=30; close.Height=30; close.Padding=new Thickness(0); close.Foreground=Palette.Muted; close.Click+=(s,e)=>CloseHistory(); DockPanel.SetDock(close,Dock.Right); header.Children.Add(close); historyCloseButton=close;
+  var close=Ui.Button(LineIcon.Make(LineIcon.Close,null,9),"关闭（Esc）"); close.Width=30; close.Height=30; close.Padding=new Thickness(0); close.Foreground=Palette.Muted; close.Click+=(s,e)=>CloseHistory(); DockPanel.SetDock(close,Dock.Right); header.Children.Add(close); historyCloseButton=close;
   historyTitle=new TextBlock { Text="历史版本", Foreground=Palette.Text, FontSize=16, FontWeight=FontWeights.SemiBold, TextTrimming=TextTrimming.CharacterEllipsis, VerticalAlignment=VerticalAlignment.Center, Margin=new Thickness(0,0,8,0) }; header.Children.Add(historyTitle);
 
   var body=new Grid(); dock.Children.Add(body);

@@ -39,7 +39,7 @@ partial class MainWindow {
    var text=new TextBlock { Text=title, VerticalAlignment=VerticalAlignment.Center };
    if(missing) { text.Foreground=Palette.Muted; text.TextDecorations=TextDecorations.Strikethrough; }
    var label=new StackPanel { Orientation=Orientation.Horizontal }; label.Children.Add(text);
-   var x=Ui.Button(Ui.Icon(G_Close,7),"关闭这篇笔记（Ctrl+W）"); x.Width=18; x.Height=18; x.Padding=new Thickness(0); x.Margin=new Thickness(6,0,-3,0); x.Focusable=false; x.Opacity=on?0.8:0; x.IsHitTestVisible=on;
+   var x=Ui.Button(LineIcon.Make(LineIcon.Close,null,9),"关闭这篇笔记（Ctrl+W）"); x.Width=18; x.Height=18; x.Padding=new Thickness(0); x.Margin=new Thickness(6,0,-3,0); x.Focusable=false; x.Opacity=on?0.8:0; x.IsHitTestVisible=on;
    x.Click+=(s,e)=> { e.Handled=true; CloseNote(name); }; label.Children.Add(x);
    var b=Ui.Button(label,"切换笔记："+title+"（Ctrl+Tab；中键点击关闭）"); b.Height=28; b.Margin=new Thickness(0,0,4,0); b.Padding=new Thickness(10,0,6,0);
    x.Foreground=on?Palette.Accent:Palette.Muted;

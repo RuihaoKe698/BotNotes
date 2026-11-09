@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Documents;
 
 namespace NotchNotesWindows {
 partial class MainWindow {
@@ -13,7 +14,6 @@ partial class MainWindow {
  static readonly string[] FontNames={ "小","较小","标准","大","特大" };
  static readonly double[] FontSizes={13,14,15,17,19};
  const int DefaultFontStep=2;
- const string G_Check="\uE73E";
  int fontStep=DefaultFontStep;
  Button fontButton; Popup fontMenu; FrameworkElement[] fontChecks;
  double FontScale { get { return FontSizes[fontStep]/15.0; } }
@@ -48,7 +48,7 @@ partial class MainWindow {
    var row=new Grid { Width=176 };
    row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(22) });
    row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
-   var check=Ui.Icon(G_Check,11); check.Foreground=Palette.Accent; check.HorizontalAlignment=HorizontalAlignment.Left; check.VerticalAlignment=VerticalAlignment.Center; check.Visibility=Visibility.Hidden;
+   var check=LineIcon.Make(LineIcon.Check,null,14); TextElement.SetForeground(check,Palette.Accent); check.HorizontalAlignment=HorizontalAlignment.Left; check.VerticalAlignment=VerticalAlignment.Center; check.Visibility=Visibility.Hidden;
    row.Children.Add(check); fontChecks[i]=check;
    var label=new TextBlock { Text=FontNames[i], FontSize=FontSizes[i], Foreground=Palette.Text, VerticalAlignment=VerticalAlignment.Center };
    Grid.SetColumn(label,1); row.Children.Add(label);

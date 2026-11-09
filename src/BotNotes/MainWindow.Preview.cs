@@ -296,7 +296,7 @@ partial class MainWindow {
    if(foldCount[bi]==0) return Host(tb,pad,start,tb);
    bool folded=IsFolded(bi); int ln=start;
    // 折叠开关挂在左侧留白里，不推动标题文字；展开时鼠标移到标题上才出现，折起后一直显示。
-   var arrow=Ui.Icon(folded?"":"",9); arrow.Foreground=Palette.Muted;
+   var arrow=LineIcon.Make(folded?LineIcon.ChevronRight:LineIcon.ChevronDown,null,12); TextElement.SetForeground(arrow,Palette.Muted);
    var toggle=new Border { Width=16, Height=tb.LineHeight, Background=Brushes.Transparent, Cursor=Cursors.Hand, Child=arrow, ToolTip=folded?"展开这一节":"折叠这一节", Opacity=folded?0.9:0 };
    toggle.MouseLeftButtonDown+=(s,e)=> { ToggleFold(ln); e.Handled=true; };
    var gutter=new Canvas { HorizontalAlignment=HorizontalAlignment.Left, VerticalAlignment=VerticalAlignment.Top }; Canvas.SetLeft(toggle,-16); gutter.Children.Add(toggle);
