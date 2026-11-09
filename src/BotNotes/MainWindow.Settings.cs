@@ -29,6 +29,7 @@ partial class MainWindow {
   public int FontSize=2;
   public Color Accent=Palette.DefaultAccent, Background=Palette.DefaultBackground;
   public string SaveDir=null;
+  public string LidRestore=null;
   public int StorageVersion=0;
  }
  internal static SettingsData ParseSettings(string[] rawLines,string dataDir) {
@@ -51,6 +52,7 @@ partial class MainWindow {
    else if(k=="background") { try { s.Background=(Color)ColorConverter.ConvertFromString(v); } catch {} }
    else if(k=="saveDir" && v.Length>0) s.SaveDir=v;
    else if(k=="archiveDir" && v.Length>0) legacyArchive=v;
+   else if(k=="lidRestore") { LidRestoreRecord r; if(LidRestoreRecord.TryParse(v,out r)) s.LidRestore=r.ToString(); }
    else if(k=="storage" && int.TryParse(v,out n)) s.StorageVersion=n;
   }
   // 没有 saveDir 时沿用旧的 archiveDir（用户自定义过归档位置）；否则由 SaveDir() 给默认值。
@@ -62,25 +64,34 @@ partial class MainWindow {
   Func<double,string> pos=v=>double.IsNaN(v)?"":Math.Round(v,1).ToString(System.Globalization.CultureInfo.InvariantCulture);
   var list=new System.Collections.Generic.List<string> { "hoverEnabled="+(s.HoverEnabled?"1":"0"), "hoverDelayMs="+s.HoverDelayMs, "saveDir="+(s.SaveDir??""), "pinned="+(s.Pinned?"1":"0"), "botSize="+s.BotSize, "fontSize="+s.FontSize, "accent="+Palette.ToHex(s.Accent), "background="+Palette.ToHex(s.Background),
    "panelLeft="+pos(s.PanelLeft), "panelTop="+pos(s.PanelTop), "dotX="+pos(s.DotX), "dotY="+pos(s.DotY), "panelW="+pos(s.PanelW), "panelH="+pos(s.PanelH) };
+  if(!string.IsNullOrEmpty(s.LidRestore)) list.Add("lidRestore="+s.LidRestore);
   if(s.StorageVersion>=2) list.Add("storage=2");
   return list.ToArray();
  }
+ internal static string SettingsPath(string dataDir) { return Path.Combine(dataDir,"settings.ini"); }
+ internal static SettingsData ReadSettingsFile(string dataDir) {
+  string f=SettingsPath(dataDir); return File.Exists(f)?ParseSettings(File.ReadAllLines(f),dataDir):null;
+ }
+ internal static void WriteSettingsFile(string dataDir,SettingsData s) {
+  var text=SerializeSettings(s);
+  string target=SettingsPath(dataDir), temp=Path.Combine(dataDir,"settings.tmp");
+  Directory.CreateDirectory(dataDir);
+  File.WriteAllLines(temp,text,System.Text.Encoding.UTF8); if(File.Exists(target)) File.Replace(temp,target,null); else File.Move(temp,target);
+ }
  void LoadSettings() {
   try {
-   string f=Path.Combine(dir,"settings.ini"); if(!File.Exists(f)) return;
-   var s=ParseSettings(File.ReadAllLines(f),dir);
-   hoverDelay=s.HoverDelayMs; panelLeft=s.PanelLeft; panelTop=s.PanelTop; dotX=s.DotX; dotY=s.DotY; prefW=s.PanelW; prefH=s.PanelH; hoverOn=s.HoverEnabled; pinned=s.Pinned; dotSize=s.BotSize; fontStep=s.FontSize; accent=s.Accent; background=s.Background; saveDir=s.SaveDir; storageVersion=s.StorageVersion;
+   var s=ReadSettingsFile(dir); if(s==null) return;
+   hoverDelay=s.HoverDelayMs; panelLeft=s.PanelLeft; panelTop=s.PanelTop; dotX=s.DotX; dotY=s.DotY; prefW=s.PanelW; prefH=s.PanelH; hoverOn=s.HoverEnabled; pinned=s.Pinned; dotSize=s.BotSize; fontStep=s.FontSize; accent=s.Accent; background=s.Background; saveDir=s.SaveDir; lidRestore=s.LidRestore; storageVersion=s.StorageVersion;
   } catch {}
  }
- void SaveSettings() {
+ bool SaveSettings(bool quiet=false) {
   try {
    double panelLeft=this.panelLeft, panelTop=this.panelTop, dotX=this.dotX, dotY=this.dotY; // 全屏时记的是全屏前的位置
    if(fullscreen && beforeFull!=null) { panelLeft=beforeFull[0]; panelTop=beforeFull[1]; dotX=beforeFull[4]; dotY=beforeFull[5]; }
-   var s=new SettingsData { HoverEnabled=hoverOn, HoverDelayMs=hoverDelay, SaveDir=saveDir, StorageVersion=storageVersion, Pinned=pinned, BotSize=dotSize, FontSize=fontStep, Accent=accent, Background=background, PanelLeft=panelLeft, PanelTop=panelTop, DotX=dotX, DotY=dotY, PanelW=prefW, PanelH=prefH };
-   var text=SerializeSettings(s);
-   string target=Path.Combine(dir,"settings.ini"), temp=Path.Combine(dir,"settings.tmp");
-   File.WriteAllLines(temp,text,System.Text.Encoding.UTF8); if(File.Exists(target)) File.Replace(temp,target,null); else File.Move(temp,target);
-  } catch(Exception ex) { Msg("设置保存失败："+ex.Message); }
+   var s=new SettingsData { HoverEnabled=hoverOn, HoverDelayMs=hoverDelay, SaveDir=saveDir, StorageVersion=storageVersion, Pinned=pinned, BotSize=dotSize, FontSize=fontStep, Accent=accent, Background=background, PanelLeft=panelLeft, PanelTop=panelTop, DotX=dotX, DotY=dotY, PanelW=prefW, PanelH=prefH, LidRestore=lidRestore };
+   WriteSettingsFile(dir,s);
+   return true;
+  } catch(Exception ex) { if(!quiet) Msg("设置保存失败："+ex.Message); return false; }
  }
  string SaveDir() { return string.IsNullOrEmpty(saveDir)?DefaultSaveDir():saveDir; }
  static bool SamePath(string a,string b) { try { return string.Equals(Path.GetFullPath(a).TrimEnd('\\','/'),Path.GetFullPath(b).TrimEnd('\\','/'),StringComparison.OrdinalIgnoreCase); } catch { return false; } }

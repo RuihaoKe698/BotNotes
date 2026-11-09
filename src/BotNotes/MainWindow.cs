@@ -64,7 +64,7 @@ partial class MainWindow : Window {
  int[] headLevel=new int[0], foldEnd=new int[0], foldCount=new int[0]; string[] foldKey=new string[0]; bool[] blockHidden=new bool[0];
  RectangleGeometry panelClip; int animGen=0;
  bool pinned=false; Button pinButton; System.Windows.Shapes.Path notchShape; Border shadowNear, shadowFar; Grid outerGrid;
- int hoverDelay=600; bool hoverOn=true; string saveDir=null; int storageVersion=0; bool settingsOpen=false;
+ int hoverDelay=600; bool hoverOn=true; string saveDir=null, lidRestore=null; int storageVersion=0; bool settingsOpen=false; KeepAwakeSession keepAwake;
  Border confirmView; TextBlock confirmTitle, confirmBody, confirmHint; DockPanel confirmButtons; Button confirmPrimaryBtn; bool confirmOpen=false; string closeTarget=null;
  Color background=Palette.DefaultBackground; readonly List<KeyValuePair<Color,Border>> bgRings=new List<KeyValuePair<Color,Border>>(); Button customBgBtn;
  static readonly string[][] BgPresets={ new[]{"#0F1013","曜石黑"}, new[]{"#1C1D21","石墨灰"}, new[]{"#0E1522","午夜蓝"}, new[]{"#0E1A15","墨绿"}, new[]{"#1A1411","暖咖"}, new[]{"#F4F3EF","纸白（浅色）"} };
@@ -92,7 +92,9 @@ partial class MainWindow : Window {
 
  public MainWindow() {
   Directory.CreateDirectory(dir);
+  try { KeepAwake.RestoreFromSettings(dir); } catch {} // 上次异常退出留下的合盖记录，启动时先恢复
   LoadSettings();
+  keepAwake=new KeepAwakeSession(KeepAwake.Native,()=>lidRestore,SetLidRestore);
   Palette.SetBackground(background); Palette.SetAccent(accent);
   // 只放窗口级资源：应用级资源里的画刷会被冻结，之后无法换色
   ThemeResources();
@@ -382,7 +384,7 @@ partial class MainWindow : Window {
   // 咖啡杯：关着是空杯，开着冒热气并用强调色。
   sleepButton.Content=LineIcon.Make(awake?LineIcon.CupSteam:LineIcon.Cup,null,16); // 两种状态杯身位置不变
   sleepButton.Background=awake?Palette.AccentBg:Brushes.Transparent; sleepButton.Foreground=awake?Palette.Accent:Palette.Muted;
-  sleepButton.ToolTip=awake?"保持唤醒中：正在阻止系统自动睡眠；点击恢复":"保持唤醒：阻止系统自动睡眠";
+  sleepButton.ToolTip=awake?"保持唤醒中：系统不会自动睡眠，合上盖子也继续运行；点击恢复":"保持唤醒：阻止系统自动睡眠，合上盖子也继续运行";
  }
  static void Choose(Button b,bool on) { b.Background=on?Palette.Raised:Brushes.Transparent; b.Foreground=on?Palette.Text:Palette.Muted; }
 }

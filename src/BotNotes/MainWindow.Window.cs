@@ -364,7 +364,27 @@ partial class MainWindow {
   body.BeginAnimation(OpacityProperty,null); Slide().BeginAnimation(TranslateTransform.YProperty,null);
   shadowFar.BeginAnimation(OpacityProperty,null); shadowNear.BeginAnimation(OpacityProperty,null); shadowFar.Opacity=shadowNear.Opacity=1;
  }
- void ToggleSleep() { if(!awake) {if(SetThreadExecutionState(ES_CONTINUOUS|ES_SYSTEM_REQUIRED)==0) {Msg("无法阻止系统睡眠。"); return;} awake=true;} else {SetThreadExecutionState(ES_CONTINUOUS); awake=false;} ShowSleepState(); }
+ // 咖啡开启：照旧阻止系统自动睡眠，再尽力把当前电源方案的合盖动作改成“不采取任何操作”。
+ // 合盖设置读不到 / 写不进 / settings 存不下时都静默跳过，不影响咖啡本身。
+ void ToggleSleep() {
+  if(!awake) {
+   if(SetThreadExecutionState(ES_CONTINUOUS|ES_SYSTEM_REQUIRED)==0) {Msg("无法阻止系统睡眠。"); return;}
+   awake=true;
+   if(keepAwake!=null) keepAwake.Enable();
+  } else StopKeepAwake();
+  ShowSleepState();
+ }
+ // 关掉咖啡：恢复记录里的合盖设置，再允许系统按自己的设置睡眠。
+ void StopKeepAwake() {
+  SetThreadExecutionState(ES_CONTINUOUS); awake=false;
+  if(keepAwake!=null) keepAwake.Restore();
+ }
+ // 记录或清除 lidRestore，立即写盘；失败时把内存里的值还原，避免和文件不一致。
+ bool SetLidRestore(string value) {
+  string old=lidRestore; lidRestore=value;
+  if(SaveSettings(true)) return true;
+  lidRestore=old; return false;
+ }
  // 出错退出前收起通知区域图标，免得留下一个点了没反应的图标。
  internal void HideTray() { if(tray!=null) { tray.Visible=false; tray.Dispose(); } }
  void Quit() {
@@ -375,7 +395,7 @@ partial class MainWindow {
    if(!Ask("当前内容没能保存。如果需要，请先把要保留的文字复制出来。","放弃未保存的更改并退出？","放弃并退出",true)) return;
   }
   RenameAllAtOpportunity(); SnapshotCurrentNote(); SaveTabOrder(); SaveFolds();
-  SetThreadExecutionState(ES_CONTINUOUS); tray.Visible=false; tray.Dispose(); quitting=true; Close(); Application.Current.Shutdown();
+  StopKeepAwake(); tray.Visible=false; tray.Dispose(); quitting=true; Close(); Application.Current.Shutdown();
  }
 }
 }

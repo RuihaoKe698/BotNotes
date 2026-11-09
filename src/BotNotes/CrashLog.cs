@@ -53,13 +53,22 @@ static class CrashLog {
  }
 
  internal static void Install(Application app) {
-  AppDomain.CurrentDomain.UnhandledException+=(s,e)=>Write(e.ExceptionObject as Exception,"background thread",DateTime.Now,Folders());
+  AppDomain.CurrentDomain.UnhandledException+=(s,e)=> { Write(e.ExceptionObject as Exception,"background thread",DateTime.Now,Folders()); RestoreLidOnce(); };
   app.DispatcherUnhandledException+=(s,e)=> { e.Handled=true; Fail(e.Exception,"UI thread"); };
   Forms.Application.ThreadException+=(s,e)=>Fail(e.Exception,"tray"); // 通知区域图标和它的菜单走 WinForms 的消息处理
  }
 
+ // 崩溃时尽力把合盖设置恢复一次；只试一次，失败也不影响写日志和退出。
+ static bool lidRestoreTried;
+ static void RestoreLidOnce() {
+  if(lidRestoreTried) return;
+  lidRestoreTried=true;
+  try { KeepAwake.RestoreFromSettings(MainWindow.DataDir()); } catch {}
+ }
+
  static void Fail(Exception ex,string source) {
   string path=Write(ex,source,DateTime.Now,Folders());
+  RestoreLidOnce();
   if(reporting) Environment.Exit(1); // 显示提示时又出错：不再弹窗，直接退出
   reporting=true;
   try {
