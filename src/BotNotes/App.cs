@@ -21,7 +21,7 @@ class App : Application {
  [STAThread] static void Main() {
   bool first;
   using(var mutex=new System.Threading.Mutex(true, @"Local\BotNotesSingleInstance", out first)) {
-   if(!first) { NotchNotesWindows.MainWindow.Notice("BotNotes 已在运行，点屏幕顶部的小圆点或通知区域图标就能打开。"); return; }
+   if(!first) { NotchNotesWindows.MainWindow.Notice("BotNotes 已在运行，点屏幕上的小机器人或通知区域图标就能打开。"); return; }
    // 旧版（DotNotes 或更早的 NotchNotes）还开着时不能搬数据文件夹，否则它之后保存的内容会写回旧文件夹
    string oldName=NotchNotesWindows.MainWindow.OldVersionRunning(); if(oldName!=null) { NotchNotesWindows.MainWindow.Notice("旧版 "+oldName+" 还在运行。请先在通知区域右键它的图标选“退出”，再打开 BotNotes。笔记会自动搬过来。"); return; }
    NotchNotesWindows.MainWindow.MigrateOldVersions();

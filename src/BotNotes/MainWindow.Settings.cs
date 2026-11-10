@@ -130,7 +130,7 @@ partial class MainWindow {
   autoOffBtn=Ui.Button("关闭","需要时手动打开",new CornerRadius(6)); autoOffBtn.Height=26; autoOffBtn.Click+=(s,e)=>SetAutoStart(false); autoRow.Children.Add(autoOffBtn);
   auto.Children.Add(autoSeg); list.Children.Add(auto);
 
-  var hover=Section("悬停展开","鼠标移到小圆点上，停留多久后自动展开。设为“立即”时，一碰到就展开。");
+  var hover=Section("悬停展开","鼠标移到小机器人上，停留多久后自动展开。设为“立即”时，一碰到就展开。");
   var hoverRow=new StackPanel { Orientation=Orientation.Horizontal };
   var seg=new Border { Background=Palette.Panel, BorderBrush=Palette.Line, BorderThickness=new Thickness(1), CornerRadius=new CornerRadius(8), Padding=new Thickness(2), Margin=new Thickness(0,0,12,0) };
   var segRow=new StackPanel { Orientation=Orientation.Horizontal }; seg.Child=segRow;
@@ -142,9 +142,9 @@ partial class MainWindow {
   plusBtn=Secondary(LineIcon.Make(LineIcon.Plus,null,14),"延长 0.1 秒"); plusBtn.Width=30; plusBtn.Padding=new Thickness(0); plusBtn.Margin=new Thickness(0); plusBtn.Click+=(s,e)=>StepHover(100); hoverRow.Children.Add(plusBtn);
   hover.Children.Add(hoverRow); list.Children.Add(hover);
 
-  var place=Section("位置和大小","按住小圆点，或按住面板顶部的空白处和“BotNotes”标签，可以拖到别处。拖到屏幕顶边附近会自动贴住。按住面板的左、右、下边或下面两个角拖动，可以改大小；面板在顶部正中时左右一起缩放，保持居中。");
+  var place=Section("位置和大小","按住小机器人，或按住面板顶部的空白处和“BotNotes”标签，可以拖到别处。拖到屏幕顶边附近会自动贴住。按住面板的左、右、下边或下面两个角拖动，可以改大小；面板在顶部正中时左右一起缩放，保持居中。");
   var placeRow=new StackPanel { Orientation=Orientation.Horizontal };
-  resetPlaceBtn=Secondary("回到顶部正中","把面板和小圆点放回屏幕顶部正中"); resetPlaceBtn.Click+=(s,e)=>ResetPosition(); placeRow.Children.Add(resetPlaceBtn);
+  resetPlaceBtn=Secondary("回到顶部正中","把面板和小机器人放回屏幕顶部正中"); resetPlaceBtn.Click+=(s,e)=>ResetPosition(); placeRow.Children.Add(resetPlaceBtn);
   resetSizeBtn=Secondary("恢复默认大小","改回 520 × 590"); resetSizeBtn.Click+=(s,e)=>ResetSize(); placeRow.Children.Add(resetSizeBtn);
   place.Children.Add(placeRow); list.Children.Add(place);
 
@@ -207,8 +207,20 @@ partial class MainWindow {
   var open=Secondary("打开文件夹","在资源管理器中打开"); open.Click+=(s,e)=>OpenSaveDir(); saveRow.Children.Add(open);
   resetSaveBtn=Ui.Button("恢复默认","改回“文档\\BotNotes”"); resetSaveBtn.Foreground=Palette.Muted; resetSaveBtn.Click+=(s,e)=> { saveDir=null; SaveSettings(); UpdateSettingsView(); }; saveRow.Children.Add(resetSaveBtn);
   save.Children.Add(saveRow); list.Children.Add(save);
+
+  // 关于：版本号、隐私说明、新版本和反馈入口。程序自己不联网，两个链接按钮交给浏览器打开。
+  var about=Section("关于","BotNotes "+CrashLog.Version()+"。BotNotes 不联网，也不收集任何信息；笔记和设置只保存在这台电脑上。“查看新版本”和“反馈问题”会用浏览器打开网页。");
+  var aboutRow=new StackPanel { Orientation=Orientation.Horizontal };
+  var update=Secondary("查看新版本","在浏览器中打开下载页"); update.Click+=(s,e)=>OpenUrl(About.ReleasesUrl); aboutRow.Children.Add(update);
+  var feedback=Secondary("反馈问题","在浏览器中打开反馈页"); feedback.Click+=(s,e)=>OpenUrl(About.FeedbackUrl); aboutRow.Children.Add(feedback);
+  var logs=Ui.Button("出错记录","打开出错记录所在的文件夹；反馈问题时可以附上里面的 crash.log"); logs.Foreground=Palette.Muted; logs.Click+=(s,e)=>OpenLogDir(); aboutRow.Children.Add(logs);
+  about.Children.Add(aboutRow);
+  about.Children.Add(new TextBlock { Text="界面与功能参考 NotchNotes（oil-oil）；小机器人的动态参考 FluxGarage RoboEyes。", Foreground=Palette.Muted, FontSize=12, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,10,0,0), LineHeight=19 });
+  list.Children.Add(about);
   return view;
  }
+ void OpenUrl(string url) { try { System.Diagnostics.Process.Start(url); } catch(Exception ex) { Msg("无法打开链接："+ex.Message); } }
+ void OpenLogDir() { try { string p=Path.Combine(DataDir(),"logs"); Directory.CreateDirectory(p); System.Diagnostics.Process.Start("explorer.exe","\""+p+"\""); } catch(Exception ex) { Msg("无法打开出错记录："+ex.Message); } }
  static string PresetName(string[][] list,Color c) { foreach(var p in list) if((Color)ColorConverter.ConvertFromString(p[0])==c) return p[1]; return "自定义"; }
  void StepHover(int ms) { hoverDelay=Math.Max(0,Math.Min(3000,hoverDelay+ms)); SaveSettings(); UpdateSettingsView(); }
  // 干净桌面的背景只写进设置；开关正开着时不去动桌面，下次开启再生效。
