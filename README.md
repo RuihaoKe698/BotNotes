@@ -2,6 +2,8 @@
 
 BotNotes 是一个常驻屏幕顶部的 Markdown 笔记工具。平时它是一个会眨眼的小机器人，点一下展开成笔记面板，点别处就收起。
 
+https://github.com/user-attachments/assets/608e6b08-8d02-41d1-a93f-a4f11e72bb6b
+
 ## 它能做什么
 
 - **随手记**：点小机器人展开面板，输入 Markdown，停止输入后自动保存。
